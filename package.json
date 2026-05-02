@@ -3,7 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "description": "RelayGate Desktop — native cross-platform GUI for the RelayGate dashboard",
-  "author": "RelayGate",
+  "homepage": "https://relaygate.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RelayOne/relaygate-desktop.git"
+  },
+  "author": {
+    "name": "RelayGate",
+    "email": "support@relaygate.ai",
+    "url": "https://relaygate.ai"
+  },
   "license": "UNLICENSED",
   "main": "dist/main.js",
   "scripts": {
