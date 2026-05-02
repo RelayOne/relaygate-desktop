@@ -1,7 +1,48 @@
 import { app, BrowserWindow, Menu, shell } from "electron";
 import * as path from "node:path";
 
-const DASHBOARD_URL = process.env.RELAYGATE_DESKTOP_URL ?? "https://app.relaygate.ai";
+const DEFAULT_DASHBOARD_URL = "https://app.relaygate.ai";
+
+function resolveDashboardUrl(): { href: string; origin: string } {
+  const raw = process.env.RELAYGATE_DESKTOP_URL ?? DEFAULT_DASHBOARD_URL;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error(`Disallowed protocol: ${parsed.protocol}`);
+    }
+    return { href: parsed.toString(), origin: parsed.origin };
+  } catch (err) {
+    process.stderr.write(
+      `[main] RELAYGATE_DESKTOP_URL=${raw} invalid (${(err as Error).message}); ` +
+        `falling back to ${DEFAULT_DASHBOARD_URL}\n`,
+    );
+    const fallback = new URL(DEFAULT_DASHBOARD_URL);
+    return { href: fallback.toString(), origin: fallback.origin };
+  }
+}
+
+const { href: DASHBOARD_URL, origin: DASHBOARD_ORIGIN } = resolveDashboardUrl();
+
+const EXTERNAL_LINK_ALLOWLIST: ReadonlySet<string> = new Set([
+  "https://relaygate.ai",
+  "https://app.relaygate.ai",
+  "https://docs.relaygate.ai",
+  "https://github.com",
+  "https://www.github.com",
+  "https://accounts.google.com",
+  "https://stripe.com",
+  "https://billing.stripe.com",
+]);
+
+function isAllowedExternalOrigin(rawUrl: string): boolean {
+  try {
+    const u = new URL(rawUrl);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    return EXTERNAL_LINK_ALLOWLIST.has(u.origin);
+  } catch {
+    return false;
+  }
+}
 
 function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -26,19 +67,37 @@ function createMainWindow(): BrowserWindow {
   });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("http://") || url.startsWith("https://")) {
+    if (isAllowedExternalOrigin(url)) {
       void shell.openExternal(url);
+    } else {
+      process.stderr.write(`[main] window-open denied for ${url}\n`);
     }
     return { action: "deny" };
   });
 
   win.webContents.on("will-navigate", (event, url) => {
-    const target = new URL(url);
-    const allowed = new URL(DASHBOARD_URL);
-    if (target.origin !== allowed.origin) {
+    let target: URL;
+    try {
+      target = new URL(url);
+    } catch {
       event.preventDefault();
-      void shell.openExternal(url);
+      process.stderr.write(`[main] will-navigate denied (unparseable URL): ${url}\n`);
+      return;
     }
+    if (target.origin !== DASHBOARD_ORIGIN) {
+      event.preventDefault();
+      if (isAllowedExternalOrigin(url)) {
+        void shell.openExternal(url);
+      } else {
+        process.stderr.write(`[main] will-navigate denied off-allowlist: ${url}\n`);
+      }
+    }
+  });
+
+  win.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
+    process.stderr.write(
+      `[main] did-fail-load url=${validatedURL} code=${errorCode} desc=${errorDescription}\n`,
+    );
   });
 
   void win.loadURL(DASHBOARD_URL);

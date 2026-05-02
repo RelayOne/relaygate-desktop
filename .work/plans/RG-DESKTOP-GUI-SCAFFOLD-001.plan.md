@@ -96,3 +96,37 @@ If the scaffold turns out to have a fundamental problem (e.g., Electron 35 incom
 - No GCP resources to undo (no triggers created, no buckets used yet).
 - Original `relaygate-app` repo and current `claude/ci-session-route-2026-05-02` branch unaffected.
 - Document the failure mode in `.work/recovery/RG-DESKTOP-GUI-SCAFFOLD-001.recovery.md` before deletion.
+
+---
+
+## Scope changes (append-only — original sections preserved above)
+
+### 2026-05-02T14:34Z — mac DMG → mac zip (cross-compile)
+
+The original Goal listed "darwin (dmg, x64 + arm64)" as a cross-platform target. Cloud Build pipeline runs on Linux only; macOS DMG creation requires a macOS host. Switched mac target in `electron-builder.yml` from `dmg` → `zip` so unsigned `.app` bundles inside `.zip` can be cross-compiled from `electronuserland/builder:wine-mono`. Users mount the zip and run the `.app` (Gatekeeper warning on first launch — `xattr -dr com.apple.quarantine`). Signed DMG distribution tracked separately as `RG-DESKTOP-GUI-MAC-DMG-FOLLOWUP` and requires a macOS Cloud Build runner.
+
+### 2026-05-02T14:18Z — "no GitHub push" criterion overridden
+
+Original plan included "No GitHub push (deferred to a separate task with its own TRIPWIRE)." After the user directive at ~14:15 ("do not ask/do scope-reducing things — build/do/test/confirm FULL only"), GitHub push was authorized in-flight. Repo pushed to `RelayOne/relaygate-desktop` (public). Subsequent commits push directly to `origin/main`. TRIPWIRE for the push was issued before execution.
+
+### 2026-05-02T14:24Z — Cloud Build trigger inlined via `gcloud builds submit`
+
+Original plan envisioned registering a Cloud Build trigger on the GitHub repo. After authorization to "build full", the build was triggered directly via `gcloud builds submit --config cloudbuild.yaml` against the local source tarball. Same artifacts, same publish path; trigger registration deferred to follow-up.
+
+### 2026-05-02T14:42Z — personal-verify rule extended
+
+Plan asked for `npm run start` launch verification via Puppeteer (RG-DESKTOP-GUI-PUPPETEER-002 follow-up). Per "FULL" directive, the orchestrator personally:
+- Downloaded all 9 published binaries to `.work/proof/binaries/`
+- Verified all 9 sha256 sums against `SHA256SUMS.txt`
+- Verified all 9 `file <bin>` formats
+- Extracted the Linux x86_64 AppImage and ran the inner electron with `--remote-debugging-port=9224` — confirmed the binary boots, opens a window, loads `https://app.relaygate.ai`, and the dashboard target is visible via CDP.
+
+### 2026-05-02T14:51Z — Codex Round 1 BLOCK addressed in src/main.ts
+
+In response to Codex Round 1 BLOCK + CONCERN findings:
+- `new URL(env)` throw guard: added `resolveDashboardUrl()` with try/catch + protocol allowlist + fallback to `https://app.relaygate.ai`.
+- Popup host allowlist: replaced "any http/https → openExternal" with `EXTERNAL_LINK_ALLOWLIST` containing relaygate.ai, app.relaygate.ai, docs.relaygate.ai, github.com, accounts.google.com, stripe.com, billing.stripe.com.
+- `will-navigate` URL parse guard added (preventDefault on unparseable URLs).
+- `did-fail-load` listener added for stderr diagnostics.
+
+Smoke assertions strengthened: title must include "relaygate", body must include "sign in", body min 60 chars, final URL origin must match expected origin (not just startsWith string).

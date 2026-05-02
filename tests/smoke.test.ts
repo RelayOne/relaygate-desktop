@@ -113,10 +113,28 @@ async function main(): Promise<void> {
       .catch(() => "<evaluate-failed>");
     const finalUrl = page.url();
 
-    const passed =
-      initialUrl.startsWith("https://app.relaygate.ai") &&
+    const expectedOrigin = "https://app.relaygate.ai";
+    const allowedFinalOrigin = (() => {
+      try {
+        return new URL(finalUrl).origin === expectedOrigin;
+      } catch {
+        return false;
+      }
+    })();
+    const titleMatchesProduct =
+      typeof title === "string" && title.toLowerCase().includes("relaygate");
+    const bodyMentionsSignIn =
       typeof bodyText === "string" &&
-      bodyText.length > 0 &&
+      bodyText.toLowerCase().indexOf("sign in") >= 0;
+    const bodyMinChars =
+      typeof bodyText === "string" && bodyText.length >= 60;
+
+    const passed =
+      initialUrl.startsWith(expectedOrigin) &&
+      allowedFinalOrigin &&
+      titleMatchesProduct &&
+      bodyMentionsSignIn &&
+      bodyMinChars &&
       screenshotOk;
 
     const result = {
