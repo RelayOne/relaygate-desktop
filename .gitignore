@@ -12,3 +12,8 @@ release/
 *.tsbuildinfo
 tests/artifacts/
 .work/recovery/
+.work/proof/binaries/*.AppImage
+.work/proof/binaries/*.deb
+.work/proof/binaries/*.zip
+.work/proof/binaries/*.exe
+!.work/proof/binaries/SHA256SUMS.txt

@@ -1,0 +1,9 @@
+059f3f7aab358fa4c24f988fcd182eb834597740ba6386f9ba7281d5bfc7d95b  release/RelayGate-0.1.0-arm64.AppImage
+29a9a5a3397e62ed8e028abbd3c3beebc9a03017966ba7af31deb9dbe6da22d7  release/RelayGate-0.1.0-x86_64.AppImage
+7ab100ed22334f062eb6e2ed4972023e5f3a53653a868284976d78933c3175d7  release/RelayGate-0.1.0-amd64.deb
+8073d0365dc535e86650b6ac72c90e906295107d370763f78bc3451ee6b45cdd  release/RelayGate-0.1.0-arm64.deb
+99dfeb6c1bf1bd208087a38bc4e16b11954bf3dce9cf7243b5d98de71663db90  release/RelayGate-Setup-0.1.0-arm64.exe
+0e48423cb07823c577471d2c0c1ac306455d68f023d57d1fe44f6023bb1645fb  release/RelayGate-Setup-0.1.0-x64.exe
+d4f421011cad92aaf396d52f78e0e0386c534dc106c28c1f9d7e937e6065f805  release/RelayGate-Setup-0.1.0.exe
+a8acd970619b700a654be9589c4599fcc26d8073cb4e7c0fdfd10a4ae78b1b70  release/RelayGate-0.1.0-arm64-mac.zip
+7b8d0da5030248f160acd417f77057c796a57dd683316370b6d954bd7552e4ad  release/RelayGate-0.1.0-x64-mac.zip
