@@ -35,35 +35,52 @@ steps:
         npm run build
 
   - name: 'electronuserland/builder:wine-mono'
-    id: dist-linux-and-windows
+    id: dist-all-platforms
     waitFor: ['build-main']
     entrypoint: bash
     args:
       - -c
       - |
         set -euxo pipefail
-        npx electron-builder --linux --win --x64 --arm64 \
-          --config.extraMetadata.commit=$COMMIT_SHA
+        # Cross-compile linux + windows + mac (unsigned zip) from Linux.
+        # Mac DMG requires a macOS host; mac zip is the cross-compilable target.
+        npx electron-builder --linux --win --mac --x64 --arm64 \
+          --config.extraMetadata.commit=$COMMIT_SHA \
+          --publish never
+        ls -la release/
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
     id: publish
-    waitFor: ['dist-linux-and-windows']
+    waitFor: ['dist-all-platforms']
     entrypoint: bash
     args:
       - -c
       - |
         set -euxo pipefail
-        for f in release/*.AppImage release/*.deb release/*.exe; do
+        SHORT="$(echo "$COMMIT_SHA" | cut -c1-7)"
+        published=0
+        for f in release/*.AppImage release/*.deb release/*.exe release/*-mac.zip; do
           [ -e "$f" ] || continue
-          gcloud storage cp "$f" "gs://relayone-488319-public/relaygate-desktop/$COMMIT_SHA/$(basename "$f")"
-          gcloud storage cp "$f" "gs://relayone-488319-public/relaygate-desktop/latest/$(basename "$f")"
+          base="$(basename "$f")"
+          gcloud storage cp "$f" "gs://relayone-488319-public/relaygate-desktop/$SHORT/$base"
+          gcloud storage cp "$f" "gs://relayone-488319-public/relaygate-desktop/latest/$base"
+          sha256sum "$f" | tee -a release/SHA256SUMS.txt
+          published=$((published + 1))
         done
-        gcloud storage ls "gs://relayone-488319-public/relaygate-desktop/$COMMIT_SHA/"
+        if [ "$published" -lt 5 ]; then
+          echo "ERROR: expected at least 5 artifacts (linux x2, mac x2, win), got $published" >&2
+          exit 1
+        fi
+        gcloud storage cp release/SHA256SUMS.txt "gs://relayone-488319-public/relaygate-desktop/$SHORT/SHA256SUMS.txt"
+        gcloud storage cp release/SHA256SUMS.txt "gs://relayone-488319-public/relaygate-desktop/latest/SHA256SUMS.txt"
+        gcloud storage ls "gs://relayone-488319-public/relaygate-desktop/$SHORT/"
 
 artifacts:
   objects:
-    location: 'gs://relayone-488319-public/relaygate-desktop/$COMMIT_SHA/'
+    location: 'gs://relayone-488319-public/relaygate-desktop/build-$BUILD_ID/'
     paths:
       - 'release/*.AppImage'
       - 'release/*.deb'
       - 'release/*.exe'
+      - 'release/*-mac.zip'
+      - 'release/SHA256SUMS.txt'

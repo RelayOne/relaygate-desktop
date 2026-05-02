@@ -31,7 +31,7 @@ linux:
 
 mac:
   target:
-    - target: dmg
+    - target: zip
       arch:
         - x64
         - arm64
@@ -39,7 +39,8 @@ mac:
   icon: assets/icon.png
   hardenedRuntime: false
   gatekeeperAssess: false
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  identity: null
+  artifactName: ${productName}-${version}-${arch}-mac.${ext}
 
 win:
   target:
