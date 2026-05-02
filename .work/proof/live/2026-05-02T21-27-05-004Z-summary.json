@@ -1,0 +1,71 @@
+{
+  "ok": false,
+  "total": 8,
+  "passed": 5,
+  "failed": 3,
+  "flows": [
+    {
+      "flow": "sign-in-page-render",
+      "ok": true,
+      "url": "https://app.relaygate.ai/sign-in",
+      "title": "RelayGate",
+      "status": 200,
+      "body_chars": 138,
+      "screenshot": "/home/eric/repos/relaygate-desktop/tests/artifacts/live/2026-05-02T21-27-05-004Z-sign-in.png",
+      "details": "Sign in to RelayGate\n\nAccess your gateway dashboard\n\nEmail\nPassword\nForgot password?\nSign in\nor\nSign in with RelayOne\n\nNo account? Sign up"
+    },
+    {
+      "flow": "sign-up-page-render",
+      "ok": true,
+      "url": "https://app.relaygate.ai/sign-up",
+      "title": "RelayGate",
+      "status": 200,
+      "body_chars": 161,
+      "screenshot": "/home/eric/repos/relaygate-desktop/tests/artifacts/live/2026-05-02T21-27-05-004Z-sign-up.png",
+      "details": "email_field=true password_field=true"
+    },
+    {
+      "flow": "ci-session-login-and-dashboard",
+      "ok": false,
+      "status": 404,
+      "error": "ci-session POST failed: <!DOCTYPE html><html lang=\"en\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><link rel=\"stylesheet\" href=\"/_next/static/css/98a71179ef05c837.css\" da"
+    },
+    {
+      "flow": "dashboard-mobile-iphone-12-pro",
+      "ok": false,
+      "status": 404,
+      "error": "ci-session POST failed"
+    },
+    {
+      "flow": "marketing-home-desktop",
+      "ok": true,
+      "url": "https://relaygate.ai/",
+      "title": "RelayGate — programmable middleware for AI traffic",
+      "status": 200,
+      "body_chars": 2000,
+      "screenshot": "/home/eric/repos/relaygate-desktop/tests/artifacts/live/2026-05-02T21-27-05-004Z-marketing-desktop-1440x900.png"
+    },
+    {
+      "flow": "marketing-home-mobile",
+      "ok": true,
+      "url": "https://relaygate.ai/",
+      "title": "RelayGate — programmable middleware for AI traffic",
+      "status": 200,
+      "body_chars": 2000,
+      "screenshot": "/home/eric/repos/relaygate-desktop/tests/artifacts/live/2026-05-02T21-27-05-004Z-marketing-mobile-390x844.png"
+    },
+    {
+      "flow": "seo-app",
+      "ok": false,
+      "url": "https://app.relaygate.ai",
+      "details": "{\"robots\":404,\"sitemap\":404,\"desc\":\"RelayGate — AI-powered routing and ContextWorker gateway.\",\"og_title\":null,\"og_image\":null,\"canonical\":null,\"noindex\":true,\"ld_json_count\":0,\"errors\":[\"robots 404\",\"noindex set\"]}"
+    },
+    {
+      "flow": "seo-site",
+      "ok": true,
+      "url": "https://relaygate.ai",
+      "details": "{\"robots\":200,\"sitemap\":200,\"desc\":\"Open-source LLM gateway: virtual keys, CEL policy engine, multi-provider routing\",\"og_title\":\"RelayGate — programmable middleware for AI traffic\",\"og_image\":\"https://relaygate.ai/og.svg\",\"canonical\":\"https://relaygate.ai/\",\"noindex\":false,\"ld_json_count\":2,\"errors\":[]}"
+    }
+  ],
+  "timestamp": "2026-05-02T21:27:16.451Z"
+}
