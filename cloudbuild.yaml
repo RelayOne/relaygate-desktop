@@ -57,23 +57,22 @@ steps:
       - -c
       - |
         set -euxo pipefail
-        SHORT="$(echo "$COMMIT_SHA" | cut -c1-7)"
         published=0
         for f in release/*.AppImage release/*.deb release/*.exe release/*-mac.zip; do
-          [ -e "$f" ] || continue
-          base="$(basename "$f")"
-          gcloud storage cp "$f" "gs://relayone-488319-public/relaygate-desktop/$SHORT/$base"
-          gcloud storage cp "$f" "gs://relayone-488319-public/relaygate-desktop/latest/$base"
-          sha256sum "$f" | tee -a release/SHA256SUMS.txt
-          published=$((published + 1))
+          [ -e "$$f" ] || continue
+          base="$$(basename "$$f")"
+          gcloud storage cp "$$f" "gs://relayone-488319-public/relaygate-desktop/$SHORT_SHA/$$base"
+          gcloud storage cp "$$f" "gs://relayone-488319-public/relaygate-desktop/latest/$$base"
+          sha256sum "$$f" | tee -a release/SHA256SUMS.txt
+          published=$$((published + 1))
         done
-        if [ "$published" -lt 5 ]; then
-          echo "ERROR: expected at least 5 artifacts (linux x2, mac x2, win), got $published" >&2
+        if [ "$$published" -lt 5 ]; then
+          echo "ERROR: expected at least 5 artifacts (linux x2, mac x2, win), got $$published" >&2
           exit 1
         fi
-        gcloud storage cp release/SHA256SUMS.txt "gs://relayone-488319-public/relaygate-desktop/$SHORT/SHA256SUMS.txt"
+        gcloud storage cp release/SHA256SUMS.txt "gs://relayone-488319-public/relaygate-desktop/$SHORT_SHA/SHA256SUMS.txt"
         gcloud storage cp release/SHA256SUMS.txt "gs://relayone-488319-public/relaygate-desktop/latest/SHA256SUMS.txt"
-        gcloud storage ls "gs://relayone-488319-public/relaygate-desktop/$SHORT/"
+        gcloud storage ls "gs://relayone-488319-public/relaygate-desktop/$SHORT_SHA/"
 
 artifacts:
   objects:
