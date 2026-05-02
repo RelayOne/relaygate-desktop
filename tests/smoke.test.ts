@@ -90,6 +90,16 @@ async function main(): Promise<void> {
       throw new Error("Failed to obtain puppeteer Page from dashboard target");
     }
 
+    let mainResponseStatus = -1;
+    page.on("response", (resp) => {
+      if (mainResponseStatus < 0 && resp.frame() === page.mainFrame()) {
+        const reqResource = resp.request().resourceType();
+        if (reqResource === "document") {
+          mainResponseStatus = resp.status();
+        }
+      }
+    });
+
     try {
       await page.waitForFunction(() => document.readyState === "complete", {
         timeout: PAGE_READY_TIMEOUT_MS,
@@ -129,13 +139,16 @@ async function main(): Promise<void> {
     const bodyMinChars =
       typeof bodyText === "string" && bodyText.length >= 60;
 
+    const httpStatusOk = mainResponseStatus >= 200 && mainResponseStatus < 400;
+
     const passed =
       initialUrl.startsWith(expectedOrigin) &&
       allowedFinalOrigin &&
       titleMatchesProduct &&
       bodyMentionsSignIn &&
       bodyMinChars &&
-      screenshotOk;
+      screenshotOk &&
+      httpStatusOk;
 
     const result = {
       ok: passed,
@@ -143,6 +156,7 @@ async function main(): Promise<void> {
       final_url: finalUrl,
       title,
       body_chars: typeof bodyText === "string" ? bodyText.length : -1,
+      http_status: mainResponseStatus,
       screenshot: screenshotOk ? screenshotPath : null,
       stdout_log: stdoutLogPath,
       stderr_log: stderrLogPath,

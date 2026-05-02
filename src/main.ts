@@ -13,7 +13,7 @@ function resolveDashboardUrl(): { href: string; origin: string } {
     return { href: parsed.toString(), origin: parsed.origin };
   } catch (err) {
     process.stderr.write(
-      `[main] RELAYGATE_DESKTOP_URL=${raw} invalid (${(err as Error).message}); ` +
+      `[main] RELAYGATE_DESKTOP_URL invalid (${(err as Error).message}); ` +
         `falling back to ${DEFAULT_DASHBOARD_URL}\n`,
     );
     const fallback = new URL(DEFAULT_DASHBOARD_URL);
@@ -23,24 +23,57 @@ function resolveDashboardUrl(): { href: string; origin: string } {
 
 const { href: DASHBOARD_URL, origin: DASHBOARD_ORIGIN } = resolveDashboardUrl();
 
-const EXTERNAL_LINK_ALLOWLIST: ReadonlySet<string> = new Set([
+// Exact origins (https-only).
+const EXTERNAL_ORIGIN_ALLOWLIST: ReadonlySet<string> = new Set([
   "https://relaygate.ai",
+  "https://www.relaygate.ai",
   "https://app.relaygate.ai",
   "https://docs.relaygate.ai",
+  "https://blog.relaygate.ai",
+  "https://api.relaygate.ai",
   "https://github.com",
   "https://www.github.com",
   "https://accounts.google.com",
   "https://stripe.com",
   "https://billing.stripe.com",
+  "https://checkout.stripe.com",
+  "https://js.stripe.com",
+  "https://m.stripe.com",
+  "https://m.stripe.network",
+  "https://relayone.ai",
+  "https://app.relayone.ai",
 ]);
+
+// Suffix matching for first-party subdomains (https-only).
+const ALLOWED_HOST_SUFFIXES: readonly string[] = [
+  ".relaygate.ai",
+  ".relayone.ai",
+  ".stripe.com",
+  ".googleusercontent.com",
+];
 
 function isAllowedExternalOrigin(rawUrl: string): boolean {
   try {
     const u = new URL(rawUrl);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
-    return EXTERNAL_LINK_ALLOWLIST.has(u.origin);
+    if (u.protocol !== "https:") return false;
+    if (EXTERNAL_ORIGIN_ALLOWLIST.has(u.origin)) return true;
+    for (const suffix of ALLOWED_HOST_SUFFIXES) {
+      if (u.hostname === suffix.slice(1) || u.hostname.endsWith(suffix)) {
+        return true;
+      }
+    }
+    return false;
   } catch {
     return false;
+  }
+}
+
+function safeUrlForLog(rawUrl: string): string {
+  try {
+    const u = new URL(rawUrl);
+    return `${u.origin}${u.pathname}`;
+  } catch {
+    return "<unparseable-url>";
   }
 }
 
@@ -70,7 +103,7 @@ function createMainWindow(): BrowserWindow {
     if (isAllowedExternalOrigin(url)) {
       void shell.openExternal(url);
     } else {
-      process.stderr.write(`[main] window-open denied for ${url}\n`);
+      process.stderr.write(`[main] window-open denied for ${safeUrlForLog(url)}\n`);
     }
     return { action: "deny" };
   });
@@ -81,7 +114,7 @@ function createMainWindow(): BrowserWindow {
       target = new URL(url);
     } catch {
       event.preventDefault();
-      process.stderr.write(`[main] will-navigate denied (unparseable URL): ${url}\n`);
+      process.stderr.write(`[main] will-navigate denied (unparseable URL)\n`);
       return;
     }
     if (target.origin !== DASHBOARD_ORIGIN) {
@@ -89,14 +122,16 @@ function createMainWindow(): BrowserWindow {
       if (isAllowedExternalOrigin(url)) {
         void shell.openExternal(url);
       } else {
-        process.stderr.write(`[main] will-navigate denied off-allowlist: ${url}\n`);
+        process.stderr.write(
+          `[main] will-navigate denied off-allowlist: ${safeUrlForLog(url)}\n`,
+        );
       }
     }
   });
 
   win.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
     process.stderr.write(
-      `[main] did-fail-load url=${validatedURL} code=${errorCode} desc=${errorDescription}\n`,
+      `[main] did-fail-load url=${safeUrlForLog(validatedURL)} code=${errorCode} desc=${errorDescription}\n`,
     );
   });
 

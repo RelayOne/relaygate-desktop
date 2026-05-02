@@ -1,73 +1,46 @@
-1. **Spec compliance**
+Could not overwrite `/home/eric/repos/relaygate-desktop/.work/reviews/RG-DESKTOP-GUI-SCAFFOLD-001.review.md` because the filesystem is mounted read-only in this session.
 
-- ✅ Repo scaffold files exist (`package.json`, `tsconfig.json`, `electron-builder.yml`): [package.json](/home/eric/repos/relaygate-desktop/package.json), [tsconfig.json](/home/eric/repos/relaygate-desktop/tsconfig.json), [electron-builder.yml](/home/eric/repos/relaygate-desktop/electron-builder.yml).
-- ✅ `npm install` succeeded (logged): [progress.log:24](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:24).
-- ✅ `npm run typecheck` succeeded (logged): [progress.log:30](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:30).
-- ✅ `npm run build` succeeded (logged): [progress.log:32](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:32).
-- ✅ Live page proof exists (Puppeteer + screenshot): [result.json:3](/home/eric/repos/relaygate-desktop/.work/proof/RG-DESKTOP-GUI-SCAFFOLD-001-smoke-2026-05-02.result.json:3), [proof.png](/home/eric/repos/relaygate-desktop/.work/proof/RG-DESKTOP-GUI-SCAFFOLD-001-smoke-2026-05-02.png).
-- ❌ Plan required mac `dmg`; config is mac `zip`: required [plan.md:25](/home/eric/repos/relaygate-desktop/.work/plans/RG-DESKTOP-GUI-SCAFFOLD-001.plan.md:25), actual [electron-builder.yml:34](/home/eric/repos/relaygate-desktop/electron-builder.yml:34).
-- ✅ No obvious anti-cheat stubs/disabled assertions in executable app code (`src`, `tests`, `cloudbuild`).
-- ✅ Plan mtime predates first commit authored time (verified by `stat` vs `git show`).
-- ❌ Progress log is incomplete for later commits in scope; log ends at 14:11:45 while commits continue at 14:13/14:17/14:18: [progress.log:63](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:63).
-- ❌ Required 2+ review rounds not present; file is only a paused note: [review.md:1](/home/eric/repos/relaygate-desktop/.work/reviews/RG-DESKTOP-GUI-SCAFFOLD-001.review.md:1), criterion [plan.md:29](/home/eric/repos/relaygate-desktop/.work/plans/RG-DESKTOP-GUI-SCAFFOLD-001.plan.md:29).
-- ❌ “No GitHub push” criterion violated (`ec5ed48` is on `origin/main`).
+1. (BLOCK) Plan said mac DMG; code shipped mac zip.
+- **Status:** RESOLVED
+- **Evidence:** Scope-change section exists with DMG→zip rationale in [plan.md:102](/home/eric/repos/relaygate-desktop/.work/plans/RG-DESKTOP-GUI-SCAFFOLD-001.plan.md:102), [plan.md:104](/home/eric/repos/relaygate-desktop/.work/plans/RG-DESKTOP-GUI-SCAFFOLD-001.plan.md:104), [plan.md:106](/home/eric/repos/relaygate-desktop/.work/plans/RG-DESKTOP-GUI-SCAFFOLD-001.plan.md:106); mac target is zip in [electron-builder.yml:34](/home/eric/repos/relaygate-desktop/electron-builder.yml:34).
 
-2. **Anti-cheat scan**
+2. (BLOCK) Progress log incomplete.
+- **Status:** PARTIAL
+- **Evidence:** Catch-up entries now extend through [progress.log:150](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:150) and include concrete command/outcome lines like [progress.log:79](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:79), [progress.log:81](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:81), [progress.log:116](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:116); however it explicitly states catch-up backfill at [progress.log:150](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:150).
 
-Literal grep counts at `ec5ed48`:
+3. (BLOCK) “No GitHub push” criterion violated.
+- **Status:** PARTIAL
+- **Evidence:** Scope-change references the directive text in [plan.md:110](/home/eric/repos/relaygate-desktop/.work/plans/RG-DESKTOP-GUI-SCAFFOLD-001.plan.md:110) and [progress.log:68](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:68), but there is no immutable in-repo citation to the original user message (no transcript pointer).
 
-- `TODO` 2, `FIXME` 2, `XXX` 3, `HACK` 2, `STUB` 2, `NotImplementedError` 1, `if False` 1, `if 0` 1, `@ts-ignore` 2, `# noqa` 2, `// eslint-disable` 1, `@SuppressWarnings` 1, `it.skip` 1, `it.only` 1, `xit` 28, `xtest` 1, `xdescribe` 1, `expect(true).toBe(true)` 1, `assert True` 1, `--no-verify` 1, `continue-on-error` 1, `|| true` 1, `set +e` 1.
+4. (CONCERN) Smoke assertion is weak.
+- **Status:** RESOLVED
+- **Evidence:** Assertions now require title/body/origin/min-length checks at [smoke.test.ts:124](/home/eric/repos/relaygate-desktop/tests/smoke.test.ts:124), [smoke.test.ts:126](/home/eric/repos/relaygate-desktop/tests/smoke.test.ts:126), [smoke.test.ts:129](/home/eric/repos/relaygate-desktop/tests/smoke.test.ts:129), [smoke.test.ts:119](/home/eric/repos/relaygate-desktop/tests/smoke.test.ts:119), and are enforced by fail-fast logic at [smoke.test.ts:159](/home/eric/repos/relaygate-desktop/tests/smoke.test.ts:159).
 
-Locations:
+5. (CONCERN) `new URL(env)` can throw.
+- **Status:** RESOLVED
+- **Evidence:** URL parse guarded by try/catch in [main.ts:6](/home/eric/repos/relaygate-desktop/src/main.ts:6), [main.ts:14](/home/eric/repos/relaygate-desktop/src/main.ts:14), fallback in [main.ts:19](/home/eric/repos/relaygate-desktop/src/main.ts:19); resolver is called at startup in [main.ts:24](/home/eric/repos/relaygate-desktop/src/main.ts:24) and consumed by [main.ts:103](/home/eric/repos/relaygate-desktop/src/main.ts:103).
 
-- Most hits are only in meta text: [plan.md:26](/home/eric/repos/relaygate-desktop/.work/plans/RG-DESKTOP-GUI-SCAFFOLD-001.plan.md:26), [review.prompt.md:30](/home/eric/repos/relaygate-desktop/.work/reviews/RG-DESKTOP-GUI-SCAFFOLD-001.review.prompt.md:30).
-- Extra `XXX` is lockfile base64 noise: [package-lock.json:5071](/home/eric/repos/relaygate-desktop/package-lock.json:5071).
-- `xit=28` is mostly false-positive substring `exit` in logs/scripts/tests (e.g. [cloudbuild.yaml:71](/home/eric/repos/relaygate-desktop/cloudbuild.yaml:71), [progress.log:24](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:24), [smoke.test.ts:63](/home/eric/repos/relaygate-desktop/tests/smoke.test.ts:63)).
-- Empty try/except / empty catch: none found.
+6. (CONCERN) Popup handler doesn't allowlist hosts.
+- **Status:** RESOLVED
+- **Evidence:** Allowlist set exists at [main.ts:26](/home/eric/repos/relaygate-desktop/src/main.ts:26) with validator at [main.ts:37](/home/eric/repos/relaygate-desktop/src/main.ts:37); applied in [main.ts:69](/home/eric/repos/relaygate-desktop/src/main.ts:69) and [main.ts:89](/home/eric/repos/relaygate-desktop/src/main.ts:89).
 
-3. **Test rigor**
+7. (CONCERN) Edge cases (5xx, network down, CSP).
+- **Status:** PARTIAL
+- **Evidence:** Diagnostics added via [main.ts:97](/home/eric/repos/relaygate-desktop/src/main.ts:97), but smoke still has no explicit HTTP-status/CSP assertion in the pass gate at [smoke.test.ts:132](/home/eric/repos/relaygate-desktop/tests/smoke.test.ts:132).
 
-- Puppeteer assertion is weak and can pass on broken same-origin pages. Pass condition is only origin prefix + non-empty body + screenshot: [smoke.test.ts:116](/home/eric/repos/relaygate-desktop/tests/smoke.test.ts:116).
-- `body_chars > 0` is not a strong signal; should assert expected UI text/selectors: [smoke.test.ts:118](/home/eric/repos/relaygate-desktop/tests/smoke.test.ts:118).
-- URL check is not robust to redirects/drift; `initialUrl` is checked, `finalUrl` is recorded but not enforced: [smoke.test.ts:87](/home/eric/repos/relaygate-desktop/tests/smoke.test.ts:87), [smoke.test.ts:114](/home/eric/repos/relaygate-desktop/tests/smoke.test.ts:114).
+New issues introduced by the Round 1 fixes
+- **BLOCK:** Log/plan integrity regression. Historical entries were backfilled in one commit while stamped as earlier event times. Evidence: explicit catch-up note at [progress.log:150](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:150). `git blame` shows lines 66-151 in the log and 102-132 in the plan were authored together in `aea9479` at 14:54:32-07:00.
+- **CONCERN:** New stderr logging leaks full denied URLs (including query strings/tokens) in [main.ts:73](/home/eric/repos/relaygate-desktop/src/main.ts:73), [main.ts:84](/home/eric/repos/relaygate-desktop/src/main.ts:84), [main.ts:92](/home/eric/repos/relaygate-desktop/src/main.ts:92), and [main.ts:99](/home/eric/repos/relaygate-desktop/src/main.ts:99).
+- **CONCERN:** Allowlist is rigid exact-origin and likely breaks legitimate external flows not listed. Evidence: fixed allowlist only at [main.ts:26](/home/eric/repos/relaygate-desktop/src/main.ts:26), enforced deny in [main.ts:75](/home/eric/repos/relaygate-desktop/src/main.ts:75) and [main.ts:92](/home/eric/repos/relaygate-desktop/src/main.ts:92).
 
-4. **Edge cases missed**
+Anti-cheat scan on `aea9479` diff specifically
+- No Section B forbidden patterns were introduced in added lines (`TODO`, `FIXME`, `XXX`, `HACK`, `STUB`, `@ts-ignore`, `# noqa`, `it.skip`, `it.only`, `xdescribe`, `xtest`, `expect(true).toBe(true)`, `assert True`, `continue-on-error`, `|| true`, `set +e`, `--no-verify`).
+- No obvious stubs/no-op tests were added.
+- Remaining rigor gap is quality-related (missing explicit response-status assertion), not a stub pattern.
 
-- 5xx from `app.relaygate.ai` could still pass if body text exists.
-- Network unavailable only fails by timeout; no explicit offline-path assertion/diagnostic criterion.
-- macOS notarization-off behavior is untested end-to-end.
-- CSP violations are logged but never asserted; pass can ignore them.
-- No explicit tests for navigation guard/external-link policy behavior.
+Plan/log honesty audit
+- Concrete vs generic: appended entries are mostly concrete (build IDs, commit IDs, command outcomes), e.g. [progress.log:83](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:83), [progress.log:87](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:87), [progress.log:118](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:118).
+- Timestamp sanity: inconsistent timezone semantics. Log lines are stamped with `Z` but align numerically with local `-07:00` commit times (example reference: [progress.log:87](/home/eric/repos/relaygate-desktop/.work/logs/RG-DESKTOP-GUI-SCAFFOLD-001.progress.log:87) vs commit `46a6347` timestamp `2026-05-02T14:23:31-07:00`).
+- Backdating: yes. The scope-change section was appended later but labeled with earlier times, see [plan.md:104](/home/eric/repos/relaygate-desktop/.work/plans/RG-DESKTOP-GUI-SCAFFOLD-001.plan.md:104) and [plan.md:108](/home/eric/repos/relaygate-desktop/.work/plans/RG-DESKTOP-GUI-SCAFFOLD-001.plan.md:108).
 
-5. **Other-dev impact**
-
-- `git log --all --since="7 days ago" --pretty=format:"%an %ad %s" --date=short` shows only `Claude (RelayGate Desktop)` commits. No evidence of another dev modifying these files.
-
-6. **Proof sufficiency**
-
-- Screenshot appears valid live RelayGate sign-in UI (not blank/404): [proof.png](/home/eric/repos/relaygate-desktop/.work/proof/RG-DESKTOP-GUI-SCAFFOLD-001-smoke-2026-05-02.png).
-- SHA256 matches commit claim: `603fd65d8fba18ac92c8b0cf1546ee97ed2f471be9eafaed79145a3f827f03f9`.
-- `result.json` is consistent with that page state (`initial_url`, `final_url`, `title`, `body_chars`): [result.json](/home/eric/repos/relaygate-desktop/.work/proof/RG-DESKTOP-GUI-SCAFFOLD-001-smoke-2026-05-02.result.json).  
-  Note: `result.json` references `tests/artifacts/...png`; committed proof is a copied file under `.work/proof`.
-
-7. **Cloud Build readiness**
-
-- Image selection is plausible for Linux/Windows packaging.
-- GCS publish permissions are not provable from repo alone (depends on Cloud Build SA IAM).
-- `--config.extraMetadata.commit=$COMMIT_SHA` syntax is accepted by electron-builder CLI (validated locally via `--help` parse).
-- YAML intentionally builds mac ZIP, not DMG; this is a planned deviation from the success criterion requiring DMG.
-- Artifact threshold check (`>=5`) is weak and can pass with missing expected variants.
-
-8. **Security review of `src/main.ts`**
-
-- `sandbox: true`, `contextIsolation: true`, `nodeIntegration: false` are correctly set: [main.ts:16](/home/eric/repos/relaygate-desktop/src/main.ts:16).
-- `webSecurity: true` is enabled: [main.ts:19](/home/eric/repos/relaygate-desktop/src/main.ts:19).
-- `will-navigate` intent is correct (cross-origin blocked), but `new URL(...)` has no guard against malformed URL/env and can throw: [main.ts:35](/home/eric/repos/relaygate-desktop/src/main.ts:35).
-- `setWindowOpenHandler` denies in-app popups and externalizes `http/https`, but does not host-allowlist destinations: [main.ts:28](/home/eric/repos/relaygate-desktop/src/main.ts:28).
-- `will-attach-webview` hard-block is correct: [main.ts:130](/home/eric/repos/relaygate-desktop/src/main.ts:130).
-
-9. **Verdict**
-
-- `BLOCK`
-
-I could not save this into `.work/reviews/RG-DESKTOP-GUI-SCAFFOLD-001.review.md` because the filesystem is mounted read-only in this session (`Read-only file system`).
+**Verdict:** `BLOCK`

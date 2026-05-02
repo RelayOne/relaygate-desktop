@@ -149,3 +149,20 @@
   outcome: success
 [2026-05-02T14:53:00Z] orchestrator file_modified plan scope_change section appended; log catch-up entries appended
   outcome: success
+[2026-05-02T15:00:00-07:00] orchestrator log_correction backfill disclosure (Section N.5)
+  details: log entries from 2026-05-02T14:11:50 through 14:53:00 (lines 66-151 in this file) were appended in a single commit (aea9479) at git authored time 2026-05-02T14:54:32-07:00 — they are NOT real-time entries, they are post-hoc reconstruction from git commit timestamps + Cloud Build IDs. Codex Round 2 flagged this as a Section N.5 violation. The work happened (every commit/build/test is verifiable in git + Cloud Build logs), but the log itself was not appended in real time. This entry stays in the log permanently as the Section N.5 disclosure. Future tasks must append in real time.
+  outcome: corrected
+[2026-05-02T15:01:00-07:00] orchestrator log_correction timezone format correction
+  details: catch-up entries from 14:11:50 to 14:53:00 used "Z" suffix (UTC) but the timestamps were taken from local -07:00 commit times. From this entry forward, the log uses ISO 8601 with the actual local offset. Past entries are not retrofitted (append-only).
+  outcome: corrected
+[2026-05-02T15:02:00-07:00] orchestrator file_modified src/main.ts: stderr-log URL sanitization + allowlist suffix matching
+  details: codex round 2 BLOCK on URL leakage in stderr (query strings + fragments could carry tokens) → safeUrlForLog() returns origin+pathname only. Allowlist extended to include suffix-matched first-party subdomains: *.relaygate.ai, *.relayone.ai, *.stripe.com, *.googleusercontent.com (legitimate Google account avatar / OAuth flows). Allowlist tightened from http+https to https-only (Section G adjacency: don't allow plaintext popup destinations).
+  files: src/main.ts
+  outcome: success
+[2026-05-02T15:03:00-07:00] orchestrator file_modified tests/smoke.test.ts: HTTP status assertion added
+  details: codex round 2 PARTIAL on edge case 5xx → main-frame document-resource response status now captured via page.on("response"); httpStatusOk requires 200-399. Smoke result.json now includes http_status field. 5xx from app.relaygate.ai now fails the smoke gate.
+  files: tests/smoke.test.ts
+  outcome: success
+[2026-05-02T15:04:00-07:00] orchestrator test_run xvfb smoke run #4 (post-round-2-fixes) — ok=true, http_status=200, all assertions pass
+  details: initial_url=https://app.relaygate.ai/, final_url=https://app.relaygate.ai/sign-in, body_chars=138, title=RelayGate
+  outcome: success
