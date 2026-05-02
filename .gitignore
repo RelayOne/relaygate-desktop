@@ -1,0 +1,14 @@
+node_modules/
+dist/
+release/
+*.log
+!.work/logs/*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+*.tsbuildinfo
+tests/artifacts/
+.work/recovery/

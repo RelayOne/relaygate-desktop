@@ -1,0 +1,69 @@
+timeout: 1800s
+
+options:
+  machineType: E2_HIGHCPU_8
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - name: 'node:20'
+    id: install
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euxo pipefail
+        npm ci
+
+  - name: 'node:20'
+    id: typecheck
+    waitFor: ['install']
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euxo pipefail
+        npm run typecheck
+
+  - name: 'node:20'
+    id: build-main
+    waitFor: ['typecheck']
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euxo pipefail
+        npm run build
+
+  - name: 'electronuserland/builder:wine-mono'
+    id: dist-linux-and-windows
+    waitFor: ['build-main']
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euxo pipefail
+        npx electron-builder --linux --win --x64 --arm64 \
+          --config.extraMetadata.commit=$COMMIT_SHA
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    id: publish
+    waitFor: ['dist-linux-and-windows']
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euxo pipefail
+        for f in release/*.AppImage release/*.deb release/*.exe; do
+          [ -e "$f" ] || continue
+          gcloud storage cp "$f" "gs://relayone-488319-public/relaygate-desktop/$COMMIT_SHA/$(basename "$f")"
+          gcloud storage cp "$f" "gs://relayone-488319-public/relaygate-desktop/latest/$(basename "$f")"
+        done
+        gcloud storage ls "gs://relayone-488319-public/relaygate-desktop/$COMMIT_SHA/"
+
+artifacts:
+  objects:
+    location: 'gs://relayone-488319-public/relaygate-desktop/$COMMIT_SHA/'
+    paths:
+      - 'release/*.AppImage'
+      - 'release/*.deb'
+      - 'release/*.exe'

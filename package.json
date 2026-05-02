@@ -1,0 +1,30 @@
+{
+  "name": "relaygate-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RelayGate Desktop — native cross-platform GUI for the RelayGate dashboard",
+  "author": "RelayGate",
+  "license": "UNLICENSED",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "start": "electron .",
+    "dev": "tsc -w -p tsconfig.json",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "test:smoke": "npm run build && tsx tests/smoke.test.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.16.5",
+    "electron": "^35.7.5",
+    "electron-builder": "^25.1.8",
+    "puppeteer-core": "^23.10.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.3"
+  }
+}
