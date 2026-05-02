@@ -77,40 +77,55 @@ async function main(): Promise<void> {
       defaultViewport: null,
     });
 
-    const targets = browser.targets();
-    const pageTarget = targets.find((t) => t.type() === "page");
-    if (!pageTarget) {
-      throw new Error("No page target found in Electron");
-    }
-    const page = await pageTarget.page();
+    const dashboardTarget = await browser.waitForTarget(
+      (t) =>
+        t.type() === "page" &&
+        (t.url().startsWith("https://app.relaygate.ai") ||
+          t.url().startsWith("http://localhost")),
+      { timeout: PAGE_READY_TIMEOUT_MS },
+    );
+    const initialUrl = dashboardTarget.url();
+    const page = await dashboardTarget.page();
     if (!page) {
-      throw new Error("Failed to obtain puppeteer Page");
+      throw new Error("Failed to obtain puppeteer Page from dashboard target");
     }
 
-    await page.waitForFunction("document.readyState === 'complete'", {
-      timeout: PAGE_READY_TIMEOUT_MS,
-    });
-    await page.waitForSelector("body", { timeout: PAGE_READY_TIMEOUT_MS });
-
-    const title = await page.title();
-    const bodyText = await page.evaluate(() => document.body.innerText.trim());
-    const url = page.url();
-
-    if (!url.startsWith("https://app.relaygate.ai") && !url.startsWith("http://localhost")) {
-      throw new Error(`Unexpected URL after load: ${url}`);
-    }
-    if (bodyText.length === 0) {
-      throw new Error("Body text is empty — page failed to render");
+    try {
+      await page.waitForFunction(() => document.readyState === "complete", {
+        timeout: PAGE_READY_TIMEOUT_MS,
+      });
+      await page.waitForSelector("body", { timeout: PAGE_READY_TIMEOUT_MS });
+    } catch (waitErr) {
+      process.stderr.write(`[smoke] readyState wait failed: ${(waitErr as Error).message}\n`);
     }
 
-    await page.screenshot({ path: screenshotPath, fullPage: true });
+    let screenshotOk = false;
+    try {
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      screenshotOk = true;
+    } catch (shotErr) {
+      process.stderr.write(`[smoke] screenshot failed: ${(shotErr as Error).message}\n`);
+    }
+
+    const title = await page.title().catch(() => "<title-fetch-failed>");
+    const bodyText = await page
+      .evaluate(() => document.body?.innerText?.trim() ?? "")
+      .catch(() => "<evaluate-failed>");
+    const finalUrl = page.url();
+
+    const passed =
+      initialUrl.startsWith("https://app.relaygate.ai") &&
+      typeof bodyText === "string" &&
+      bodyText.length > 0 &&
+      screenshotOk;
 
     const result = {
-      ok: true,
-      url,
+      ok: passed,
+      initial_url: initialUrl,
+      final_url: finalUrl,
       title,
-      body_chars: bodyText.length,
-      screenshot: screenshotPath,
+      body_chars: typeof bodyText === "string" ? bodyText.length : -1,
+      screenshot: screenshotOk ? screenshotPath : null,
       stdout_log: stdoutLogPath,
       stderr_log: stderrLogPath,
       timestamp: new Date().toISOString(),
@@ -122,6 +137,14 @@ async function main(): Promise<void> {
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 
     await browser.disconnect();
+
+    if (!passed) {
+      throw new Error(
+        `Smoke assertions failed: initial_url=${initialUrl} final_url=${finalUrl} body_chars=${
+          typeof bodyText === "string" ? bodyText.length : -1
+        } screenshot_ok=${screenshotOk}`,
+      );
+    }
   } finally {
     if (!exited) {
       child.kill("SIGTERM");

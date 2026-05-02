@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "initial_url": "https://app.relaygate.ai/",
+  "final_url": "https://app.relaygate.ai/sign-in",
+  "title": "RelayGate",
+  "body_chars": 138,
+  "screenshot": "/home/eric/repos/relaygate-desktop/tests/artifacts/smoke-2026-05-02T21-07-09-297Z.png",
+  "stdout_log": "/home/eric/repos/relaygate-desktop/tests/artifacts/smoke-2026-05-02T21-07-09-297Z.stdout.log",
+  "stderr_log": "/home/eric/repos/relaygate-desktop/tests/artifacts/smoke-2026-05-02T21-07-09-297Z.stderr.log",
+  "timestamp": "2026-05-02T21:07:10.747Z"
+}
