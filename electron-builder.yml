@@ -46,7 +46,7 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: assets/icon.png
+  icon: assets/icon.ico
   artifactName: ${productName}-Setup-${version}-${arch}.${ext}
 
 nsis:
