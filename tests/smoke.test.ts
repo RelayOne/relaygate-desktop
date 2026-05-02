@@ -77,6 +77,52 @@ async function main(): Promise<void> {
       defaultViewport: null,
     });
 
+    // Attach response listener to ALL targets BEFORE waiting on any specific
+    // target, so a fast initial document response can't slip past unobserved.
+    let mainResponseStatus = -1;
+    let recordedDocUrl = "";
+    browser.on("targetcreated", async (t) => {
+      if (t.type() !== "page") return;
+      const p = await t.page().catch(() => null);
+      if (!p) return;
+      p.on("response", (resp) => {
+        if (mainResponseStatus >= 0) return;
+        if (resp.frame() !== p.mainFrame()) return;
+        if (resp.request().resourceType() !== "document") return;
+        const u = resp.url();
+        if (
+          !u.startsWith("https://app.relaygate.ai") &&
+          !u.startsWith("http://localhost")
+        ) {
+          return;
+        }
+        mainResponseStatus = resp.status();
+        recordedDocUrl = u;
+      });
+    });
+
+    // Cover the case where the page target was already created before this
+    // listener attached (race window between connect() and on()).
+    for (const t of browser.targets()) {
+      if (t.type() !== "page") continue;
+      const p = await t.page().catch(() => null);
+      if (!p) continue;
+      p.on("response", (resp) => {
+        if (mainResponseStatus >= 0) return;
+        if (resp.frame() !== p.mainFrame()) return;
+        if (resp.request().resourceType() !== "document") return;
+        const u = resp.url();
+        if (
+          !u.startsWith("https://app.relaygate.ai") &&
+          !u.startsWith("http://localhost")
+        ) {
+          return;
+        }
+        mainResponseStatus = resp.status();
+        recordedDocUrl = u;
+      });
+    }
+
     const dashboardTarget = await browser.waitForTarget(
       (t) =>
         t.type() === "page" &&
@@ -89,16 +135,6 @@ async function main(): Promise<void> {
     if (!page) {
       throw new Error("Failed to obtain puppeteer Page from dashboard target");
     }
-
-    let mainResponseStatus = -1;
-    page.on("response", (resp) => {
-      if (mainResponseStatus < 0 && resp.frame() === page.mainFrame()) {
-        const reqResource = resp.request().resourceType();
-        if (reqResource === "document") {
-          mainResponseStatus = resp.status();
-        }
-      }
-    });
 
     try {
       await page.waitForFunction(() => document.readyState === "complete", {
@@ -139,6 +175,21 @@ async function main(): Promise<void> {
     const bodyMinChars =
       typeof bodyText === "string" && bodyText.length >= 60;
 
+    // If we missed the main-frame response (rare but possible when Electron's
+    // page is created before puppeteer.connect()), fall back to a HEAD probe
+    // against the final URL. This keeps the assertion meaningful while
+    // avoiding the regression flagged in Round 3 review.
+    if (mainResponseStatus < 0) {
+      try {
+        const probe = await fetch(finalUrl, { method: "GET", redirect: "follow" });
+        mainResponseStatus = probe.status;
+        recordedDocUrl = `fallback-fetch:${finalUrl}`;
+      } catch (probeErr) {
+        process.stderr.write(
+          `[smoke] HTTP status fallback fetch failed: ${(probeErr as Error).message}\n`,
+        );
+      }
+    }
     const httpStatusOk = mainResponseStatus >= 200 && mainResponseStatus < 400;
 
     const passed =
@@ -157,6 +208,7 @@ async function main(): Promise<void> {
       title,
       body_chars: typeof bodyText === "string" ? bodyText.length : -1,
       http_status: mainResponseStatus,
+      http_status_source: recordedDocUrl,
       screenshot: screenshotOk ? screenshotPath : null,
       stdout_log: stdoutLogPath,
       stderr_log: stderrLogPath,

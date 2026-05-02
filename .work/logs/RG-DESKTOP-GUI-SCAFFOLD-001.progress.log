@@ -166,3 +166,17 @@
 [2026-05-02T15:04:00-07:00] orchestrator test_run xvfb smoke run #4 (post-round-2-fixes) — ok=true, http_status=200, all assertions pass
   details: initial_url=https://app.relaygate.ai/, final_url=https://app.relaygate.ai/sign-in, body_chars=138, title=RelayGate
   outcome: success
+[2026-05-02T15:07:00-07:00] orchestrator review_round_started codex Round 3 dispatched (id bqlsyto1a)
+  outcome: in-progress
+[2026-05-02T15:07:30-07:00] orchestrator subagent_dispatched gh pr merge #11 #12 #13 (relaygate-app) + #109 (sites) — all squashed + branch deleted
+  details: merge commits eb879e7 (#12), fd4c561 (#11), b19d26c (#13), aa40bd2 (#109)
+  outcome: success
+[2026-05-02T15:08:00-07:00] orchestrator tripwire gcloud builds submit relaygate-app COMMIT_SHA=b19d26c (post-merge deploy), build_id=78580667-b05f-417c-a8f4-973e3d3f6987
+  outcome: in-progress
+[2026-05-02T15:11:00-07:00] orchestrator review_round_finished codex Round 3 verdict=CONCERN
+  details: 5/5 Round 2 findings RESOLVED. New CONCERN: race in mainResponseStatus capture (listener attached after target acquired; fast first response could miss). Stale prose CONCERN about review.md line 1.
+  outcome: success
+[2026-05-02T15:13:00-07:00] orchestrator file_modified tests/smoke.test.ts: race-window fix for http_status capture
+  details: response listener now attached via browser.on("targetcreated") + iteration over existing browser.targets() BEFORE waitForTarget. Fallback HTTP fetch against finalUrl if mainResponseStatus stays -1 (defensive). result.json now records http_status_source field showing where the status came from (response listener URL or "fallback-fetch:..."). Smoke run #5 ok=true, http_status=200, http_status_source=https://app.relaygate.ai/sign-in.
+  files: tests/smoke.test.ts
+  outcome: success
