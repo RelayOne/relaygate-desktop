@@ -1,0 +1,84 @@
+# cloudbuild-mac.yaml — macOS DMG build pipeline.
+#
+# This pipeline is intended for execution on a macOS Cloud Build worker pool
+# OR via SSH into a self-hosted macOS Mac mini / MacStadium / MacinCloud host.
+# Cloud Build does NOT natively support macOS hosts, so this YAML is consumed
+# by a Cloud Build job that uses an SSH-tunneled remote runner (the same
+# pattern used by sites/cloudbuild-deploy-sites.yaml for VM-rsync deploys).
+#
+# When ready to ship signed/notarized DMG:
+# 1. Provision a macOS host (Mac mini in office, MacStadium, MacinCloud, etc.)
+# 2. Add Secret Manager secrets:
+#      - apple-developer-id-cert (base64 .p12)
+#      - apple-developer-id-cert-pass
+#      - apple-id-email
+#      - apple-app-specific-password
+#      - apple-team-id
+# 3. Wrap this YAML in a Cloud Build job that SSHs to the macOS host and
+#    invokes `npm run dist:mac` after pulling the repo.
+# 4. Upload signed .dmg artifacts to gs://relayone-488319-public/relaygate-desktop/$COMMIT_SHA/
+#
+# Until then, mac DMG is built LOCALLY by a developer with `npm run dist:mac`
+# (see docs/MAC_BUILD.md). The cross-platform Linux pipeline (cloudbuild.yaml)
+# already ships unsigned mac.zip which mounts the .app bundle directly.
+
+substitutions:
+  _MAC_RUNNER_HOST: ''   # set per-deployment via --substitutions
+  _MAC_RUNNER_USER: 'cloudbuild'
+
+steps:
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    id: ssh-mac-runner-build
+    entrypoint: bash
+    args:
+      - -euc
+      - |
+        if [ -z "${_MAC_RUNNER_HOST}" ]; then
+          echo "ERROR: _MAC_RUNNER_HOST not set; macOS DMG build skipped"
+          echo "DMG must be built locally on a macOS host (see docs/MAC_BUILD.md)"
+          exit 0
+        fi
+
+        gcloud secrets versions access latest \
+          --secret="relaygate-desktop-mac-deploy-key" \
+          --project="$PROJECT_ID" > /workspace/deploy_key
+        chmod 600 /workspace/deploy_key
+        SSH_ARGS="-i /workspace/deploy_key -o StrictHostKeyChecking=no -o BatchMode=yes"
+
+        ssh $$SSH_ARGS "${_MAC_RUNNER_USER}@${_MAC_RUNNER_HOST}" "
+          set -euxo pipefail
+          cd /tmp
+          rm -rf relaygate-desktop-build
+          git clone --depth=1 --branch=main https://github.com/RelayOne/relaygate-desktop.git relaygate-desktop-build
+          cd relaygate-desktop-build
+          git checkout $COMMIT_SHA
+          npm ci
+          npm run typecheck
+          npm run build
+          npm run dist:mac
+          ls -la release/
+        "
+
+        scp $$SSH_ARGS -r "${_MAC_RUNNER_USER}@${_MAC_RUNNER_HOST}:/tmp/relaygate-desktop-build/release/*.dmg" /workspace/release/
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    id: publish-mac-dmg
+    waitFor: ['ssh-mac-runner-build']
+    entrypoint: bash
+    args:
+      - -euc
+      - |
+        if [ ! -d /workspace/release ] || [ -z "$(ls /workspace/release/*.dmg 2>/dev/null)" ]; then
+          echo "No DMG artifacts to publish (mac runner not configured)"
+          exit 0
+        fi
+        for f in /workspace/release/*.dmg; do
+          base="$(basename "$$f")"
+          gcloud storage cp "$$f" "gs://relayone-488319-public/relaygate-desktop/$SHORT_SHA/$$base"
+          gcloud storage cp "$$f" "gs://relayone-488319-public/relaygate-desktop/latest/$$base"
+          sha256sum "$$f"
+        done
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_MEDIUM

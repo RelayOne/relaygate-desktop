@@ -1,0 +1,47 @@
+# Project — RelayGate Desktop
+
+## Commands
+
+```bash
+# build:     npm run build       # tsc -p tsconfig.json
+# test:      npm run test:smoke  # Puppeteer smoke against running Electron
+# typecheck: npm run typecheck   # tsc --noEmit
+# start:     npm run start       # electron .
+# dist:      npm run dist        # electron-builder for current host
+# dist:mac:  npm run dist:mac    # macOS only — produces signed .dmg + .zip
+```
+
+## Structure
+
+- Single-package Electron app, not a monorepo.
+- `src/main.ts` — main process entry. `src/preload.ts` — contextBridge.
+- No renderer source; the BrowserWindow points at `https://app.relaygate.ai` (live dashboard from sibling repo `relaygate-app`).
+- `electron-builder.yml` — cross-platform packaging config (Linux+Windows from any host, macOS from macOS host).
+- `cloudbuild.yaml` — Cloud Build pipeline; publishes to `gs://relayone-488319-public/relaygate-desktop/{COMMIT_SHA}/`. Auto-triggered on push to main via Cloud Build trigger `relaygate-desktop-binaries`.
+- `cloudbuild-mac.yaml` — scaffold for future macOS runner SSH-build path. See `docs/MAC_BUILD.md`.
+
+## Sibling surfaces
+
+- `relaygate-app` (Next.js SaaS dashboard, Cloud Run) — what this Electron window displays at https://app.relaygate.ai.
+- `RelayOne/relaygate` (Go LLM routing gateway) — separate binary; not bundled with this desktop yet.
+- `sites/relaygate` (Vite static marketing site at relaygate.ai) — links to this repo's published binaries on its `/downloads/` page.
+
+## Docs
+
+`README.md` is canonical. `docs/MAC_BUILD.md` documents the macOS DMG path (local now, CI future). `.work/plans/` and `.work/logs/` track in-flight scaffold tasks.
+
+## Compaction
+
+Preserve: current plan file path under `.work/plans/`, modified file paths in `src/`, build/test results, latest commit SHA, latest Cloud Build ID.
+
+## Rules
+
+- Never classify failures as "pre-existing". ALL failures are findings. Present to user.
+- FIXED requires a commit hash: "STATUS: FIXED (commit: abc1234)".
+- BLOCKED is honest. Use it when you genuinely can't fix something.
+- USER-SKIPPED requires explicit user approval via AskUserQuestion before writing.
+- Always write findings to a report file (`audit/` or `.work/`) BEFORE presenting them verbally.
+- No GitHub Actions. All builds via Cloud Build on `relayone-488319`.
+- Secrets via Secret Manager on `relayone-488319`. No hardcoding.
+- Sandbox + contextIsolation + nodeIntegration:false in `src/main.ts` are non-negotiable.
+- External link allowlist in `src/main.ts` (EXTERNAL_ORIGIN_ALLOWLIST + ALLOWED_HOST_SUFFIXES) governs all popup + navigate behavior. Adding to it requires a security review note in the commit message.
