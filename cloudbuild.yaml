@@ -95,7 +95,8 @@ steps:
           mkfs.hfsplus -v "RelayGate" "$$img" > /dev/null
           # Userspace add — no mount needed.
           $$HFS_BIN "$$img" addall "$$app_dir"
-          $$DMG_BIN "$$img" "$$out_dmg" 2>&1 | tail -2
+          # Mozilla fork's dmg CLI takes a subcommand: `dmg dmg <iso> <dmg>`.
+          $$DMG_BIN dmg "$$img" "$$out_dmg" 2>&1 | tail -3
           ls -la "$$out_dmg"
           rm -rf "$$extract_dir" "$$img"
         }
