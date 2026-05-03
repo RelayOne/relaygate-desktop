@@ -108,14 +108,18 @@ Min 3 rounds per M.4. Transcripts in `.work/reviews/`.
 - **Verified end-to-end:** push to main → trigger fires automatically → build runs against `cloudbuild.yaml` → 9 binaries publish to `gs://...relaygate-desktop/{COMMIT_SHA,latest}/`
 - Last auto-build: `c158e740-0cc9-4334-854a-407f27ec6f81` SUCCESS for `bed7384` (push of mac-config split fix)
 
-### RG-DESKTOP-GUI-MAC-DMG-FOLLOWUP ✅ INFRASTRUCTURE READY
+### RG-DESKTOP-GUI-MAC-DMG-FOLLOWUP ✅ SHIPPING (CI-built, unsigned)
 
-- `electron-builder.mac.yml` (new): extends shared config, adds DMG target alongside zip with hardenedRuntime
-- `electron-builder.yml`: ships zip-only mac target (cross-compilable from Linux Cloud Build)
-- `package.json`: `dist:mac` script invokes `electron-builder --mac --config electron-builder.mac.yml`
-- `cloudbuild-mac.yaml` (new): scaffold for SSH-into-macOS-runner build path (no-op without `_MAC_RUNNER_HOST` substitution + Apple Developer secrets)
-- `docs/MAC_BUILD.md` (new): documents local-mac flow + future CI prerequisites (macOS host, Apple Dev Cert $99/yr, 5 Secret Manager entries, second CB trigger)
-- Cross-platform DMG from Linux is genuinely impossible without Apple's `hdiutil`. This is the org pattern (sister `RelayOne/apps/agent-desktop` has identical config and same local-mac flow). NOT a partial — this is the complete architectural answer.
+Cross-platform DMG creation from Linux IS now possible — solved using the mozilla fork of libdmg-hfsplus which ships a userspace `hfsplus` binary (no kernel HFS+ module needed, which Cloud Build sandboxes lack).
+
+- `cloudbuild.yaml` step `build-mac-dmg`: ubuntu:22.04 base, installs hfsprogs, compiles mozilla/libdmg-hfsplus from source, runs `mkfs.hfsplus` → `hfsplus addall` → `dmg dmg in out` → publishes UDIF zlib-compressed DMG with valid `koly` trailer.
+- Auto-build at `853f194` SUCCESS — 11 artifacts published in CI:
+  - `RelayGate-0.1.0-x64.dmg` (306,073,747 bytes, sha256 `bea6e6d338…fa1612`)
+  - `RelayGate-0.1.0-arm64.dmg` (296,767,019 bytes, sha256 `f5f90f676e…fc83`)
+  - plus 4 linux + 3 windows + 2 mac.zip + SHA256SUMS.txt
+- Both DMGs HTTP 200 from `gs://...latest/` and linked from `relaygate.ai/downloads/` as the recommended macOS download.
+- DMGs are **unsigned** (no Apple Developer ID, no notarization) — Gatekeeper warns on first launch; users `xattr -dr com.apple.quarantine /Applications/RelayGate.app`.
+- Signed/notarized DMG path still scaffolded in `cloudbuild-mac.yaml` + `docs/MAC_BUILD.md` for future macOS-runner setup. Not a blocker — unsigned DMG is the standard "open-source ships it" baseline (same as VLC, OBS, OpenEmu before their notarization rollouts).
 
 ### RG-DESKTOP-GUI-CLAUDEMD-007 ⊘ USER-DEFERRED
 
