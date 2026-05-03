@@ -65,10 +65,14 @@ steps:
           zlib1g-dev unzip hfsprogs file 2>&1 | tail -1
 
         cd /tmp
-        git clone --depth=1 https://github.com/fanquake/libdmg-hfsplus
+        # Mozilla fork ships both `dmg` (UDIF writer) and `hfsplus` (userspace
+        # HFS+ writer that does NOT require kernel hfsplus module — Cloud Build
+        # containers don't have it loaded). The fanquake fork only ships `dmg`.
+        git clone --depth=1 https://github.com/mozilla/libdmg-hfsplus
         cmake -S libdmg-hfsplus -B libdmg-hfsplus/build > /dev/null
         make -C libdmg-hfsplus/build -j$$(nproc) > /dev/null
         DMG_BIN=/tmp/libdmg-hfsplus/build/dmg/dmg
+        HFS_BIN=/tmp/libdmg-hfsplus/build/hfs/hfsplus
 
         cd /workspace
 
@@ -84,17 +88,13 @@ steps:
           local size_mb
           size_mb=$$(du -sm "$$app_dir" | awk "{print int(\$$1 * 1.4) + 60}")
           local img="/tmp/$${arch_label}.img"
-          local mnt="/mnt/$${arch_label}"
           dd if=/dev/zero of="$$img" bs=1M count=$$size_mb status=none
           mkfs.hfsplus -v "RelayGate" "$$img" > /dev/null
-          mkdir -p "$$mnt"
-          mount -o loop "$$img" "$$mnt"
-          cp -a "$$app_dir" "$$mnt/"
-          ln -sf /Applications "$$mnt/Applications"
-          umount "$$mnt"
+          # Userspace add — no mount needed.
+          $$HFS_BIN "$$img" addall "$$app_dir"
           $$DMG_BIN "$$img" "$$out_dmg" 2>&1 | tail -2
           ls -la "$$out_dmg"
-          rm -rf "$$extract_dir" "$$mnt" "$$img"
+          rm -rf "$$extract_dir" "$$img"
         }
 
         build_dmg "RelayGate-0.1.0-x64-mac.zip" x64
