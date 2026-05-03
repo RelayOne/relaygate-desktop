@@ -43,22 +43,74 @@ steps:
       - |
         set -euxo pipefail
         # Cross-compile linux + windows + mac (unsigned zip) from Linux.
-        # Mac DMG requires a macOS host; mac zip is the cross-compilable target.
+        # mac.dmg is built in the next step (build-mac-dmg) using
+        # libdmg-hfsplus from source, since electron-builder's DMG path
+        # requires hdiutil (macOS-only).
         npx electron-builder --linux --win --mac --x64 --arm64 \
           --config.extraMetadata.commit=$COMMIT_SHA \
           --publish never
         ls -la release/
 
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-    id: publish
+  - name: 'ubuntu:22.04'
+    id: build-mac-dmg
     waitFor: ['dist-all-platforms']
     entrypoint: bash
     args:
       - -c
       - |
         set -euxo pipefail
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq
+        apt-get install -y -qq git cmake build-essential libssl-dev libbz2-dev \
+          zlib1g-dev unzip hfsprogs file 2>&1 | tail -1
+
+        cd /tmp
+        git clone --depth=1 https://github.com/fanquake/libdmg-hfsplus
+        cmake -S libdmg-hfsplus -B libdmg-hfsplus/build > /dev/null
+        make -C libdmg-hfsplus/build -j$$(nproc) > /dev/null
+        DMG_BIN=/tmp/libdmg-hfsplus/build/dmg/dmg
+
+        cd /workspace
+
+        build_dmg() {
+          local zip_file="release/$$1" arch_label="$$2"
+          local out_dmg="release/RelayGate-0.1.0-$${arch_label}.dmg"
+          local extract_dir="/tmp/extract-$${arch_label}"
+          mkdir -p "$$extract_dir"
+          unzip -oq "$$zip_file" -d "$$extract_dir"
+          local app_dir
+          app_dir=$$(find "$$extract_dir" -maxdepth 1 -type d -name "*.app" | head -1)
+          [ -z "$$app_dir" ] && { echo "no .app in $$zip_file"; return 1; }
+          local size_mb
+          size_mb=$$(du -sm "$$app_dir" | awk "{print int(\$$1 * 1.4) + 60}")
+          local img="/tmp/$${arch_label}.img"
+          local mnt="/mnt/$${arch_label}"
+          dd if=/dev/zero of="$$img" bs=1M count=$$size_mb status=none
+          mkfs.hfsplus -v "RelayGate" "$$img" > /dev/null
+          mkdir -p "$$mnt"
+          mount -o loop "$$img" "$$mnt"
+          cp -a "$$app_dir" "$$mnt/"
+          ln -sf /Applications "$$mnt/Applications"
+          umount "$$mnt"
+          $$DMG_BIN "$$img" "$$out_dmg" 2>&1 | tail -2
+          ls -la "$$out_dmg"
+          rm -rf "$$extract_dir" "$$mnt" "$$img"
+        }
+
+        build_dmg "RelayGate-0.1.0-x64-mac.zip" x64
+        build_dmg "RelayGate-0.1.0-arm64-mac.zip" arm64
+        ls -la release/*.dmg
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    id: publish
+    waitFor: ['build-mac-dmg']
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euxo pipefail
         published=0
-        for f in release/*.AppImage release/*.deb release/*.exe release/*-mac.zip; do
+        for f in release/*.AppImage release/*.deb release/*.exe release/*-mac.zip release/*.dmg; do
           [ -e "$$f" ] || continue
           base="$$(basename "$$f")"
           gcloud storage cp "$$f" "gs://relayone-488319-public/relaygate-desktop/$SHORT_SHA/$$base"
@@ -66,8 +118,8 @@ steps:
           sha256sum "$$f" | tee -a release/SHA256SUMS.txt
           published=$$((published + 1))
         done
-        if [ "$$published" -lt 5 ]; then
-          echo "ERROR: expected at least 5 artifacts (linux x2, mac x2, win), got $$published" >&2
+        if [ "$$published" -lt 7 ]; then
+          echo "ERROR: expected at least 7 artifacts (linux x4, mac.zip x2, mac.dmg x2, win), got $$published" >&2
           exit 1
         fi
         gcloud storage cp release/SHA256SUMS.txt "gs://relayone-488319-public/relaygate-desktop/$SHORT_SHA/SHA256SUMS.txt"
@@ -82,4 +134,5 @@ artifacts:
       - 'release/*.deb'
       - 'release/*.exe'
       - 'release/*-mac.zip'
+      - 'release/*.dmg'
       - 'release/SHA256SUMS.txt'
