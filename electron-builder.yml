@@ -30,16 +30,11 @@ linux:
   artifactName: ${productName}-${version}-${arch}.${ext}
 
 mac:
-  # On a macOS Cloud Build / dev host, both DMG and ZIP are produced.
-  # On a Linux host (default Cloud Build), DMG is skipped automatically by
-  # electron-builder and only ZIP is produced (zip is cross-compilable; DMG is not).
-  # See docs/MAC_BUILD.md for the macOS host setup.
+  # This shared config ships zip ONLY (cross-compilable from Linux Cloud Build).
+  # DMG target lives in electron-builder.mac.yml and is opt-in via
+  # `npm run dist:mac` on a macOS host. See docs/MAC_BUILD.md.
   target:
     - target: zip
-      arch:
-        - x64
-        - arm64
-    - target: dmg
       arch:
         - x64
         - arm64
@@ -49,19 +44,6 @@ mac:
   gatekeeperAssess: false
   identity: null
   artifactName: ${productName}-${version}-${arch}-mac.${ext}
-
-dmg:
-  title: RelayGate ${version}
-  background: null
-  iconSize: 100
-  contents:
-    - x: 130
-      y: 220
-      type: file
-    - x: 410
-      y: 220
-      type: link
-      path: /Applications
 
 win:
   target:

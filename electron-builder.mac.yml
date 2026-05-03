@@ -1,0 +1,34 @@
+# macOS-only electron-builder config — invoked by `npm run dist:mac`.
+# This config extends electron-builder.yml's mac section with DMG target.
+# Run on a macOS host only. Linux Cloud Build uses electron-builder.yml directly.
+
+extends: electron-builder.yml
+
+mac:
+  target:
+    - target: zip
+      arch:
+        - x64
+        - arm64
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  category: public.app-category.developer-tools
+  icon: assets/icon.png
+  # Set CSC_LINK + CSC_KEY_PASSWORD in env to enable signing (see docs/MAC_BUILD.md).
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  artifactName: ${productName}-${version}-${arch}-mac.${ext}
+
+dmg:
+  title: RelayGate ${version}
+  iconSize: 100
+  contents:
+    - x: 130
+      y: 220
+      type: file
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
