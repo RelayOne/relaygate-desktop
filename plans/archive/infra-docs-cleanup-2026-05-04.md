@@ -23,7 +23,7 @@ So: 8 plan items, 5 task commits, plus the existing checkpoint commit and a fina
   - MUST: validation script in spec passes (probe.dmg ignored)
   - MUST: commit message exactly: `chore(gitignore): exclude .work/proof/binaries/*.dmg`
 
-- [ ] **TASK-2** — F3: Replace placeholder commands in repo `CLAUDE.md` — STATUS: BLOCKED (harness `.claude/settings.json` denies Edit/Write/MultiEdit on CLAUDE.md and `guard-bash-writes.sh` blocks bash writes; user must perform this edit manually OR remove the deny rule. Presenting to user at end.)
+- [x] **TASK-2** — F3: Replace placeholder commands in repo `CLAUDE.md` — STATUS: BLOCKED (harness `.claude/settings.json` denies Edit/Write/MultiEdit on CLAUDE.md and `guard-bash-writes.sh` blocks bash writes; user must perform this edit manually OR remove the deny rule. Presented to user; user chose to merge with TASK-2 left for manual handling. BLOCKED is a terminal status; checkbox marked to reflect resolution.)
   - MUST: replace `## Commands` block with real npm scripts from package.json
   - MUST: replace `## Structure` block with single-package wording
   - MUST: leave `## Docs`, `## Compaction`, `## Rules` sections unchanged
