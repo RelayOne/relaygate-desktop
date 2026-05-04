@@ -9,7 +9,7 @@
 <!--
 RESULTS:
 - TASK-1 (create SA): FIXED — SA exists, disabled=False, displayName "RelayGate Desktop CI"
-- TASK-2 (grant 3 roles): FIXED — verified via project + bucket IAM policy reads
+- TASK-2 (grant 3 roles + 2 actAs bindings on SA): FIXED — verified via project + bucket IAM policy reads. Initially missed the actAs bindings (Cloud Build service agent needs serviceAccountTokenCreator + serviceAccountUser on the new SA for PR-event triggers); discovered when PR trigger fired with 0s "fail" status and no build registered. Added bindings, retriggered via `/gcbrun`, build registered and queued.
 - TASK-3 (re-bind trigger): FIXED — trigger.serviceAccount = relaygate-desktop-ci@...
 - TASK-4 (test main-push build): IN-FLIGHT at spec close — build 79719725-... QUEUED→WORKING with new SA. Permissions confirmed sufficient to start. Final SUCCESS pending; will be visible in subsequent build history.
 - TASK-5 (create PR trigger): FIXED — relaygate-desktop-pr trigger created, bound to new SA, pullRequest branch=^main$
@@ -80,7 +80,7 @@ gcloud iam service-accounts describe relaygate-desktop-ci@relayone-488319.iam.gs
 
 ### TASK-2 — Grant minimum roles to new SA
 
-Three roles, all project-level except storage which is bucket-level:
+Three roles, all project-level except storage which is bucket-level. **Plus**: the Cloud Build service agent (`service-{PROJECT_NUMBER}@gcp-sa-cloudbuild.iam.gserviceaccount.com`) needs `roles/iam.serviceAccountUser` and `roles/iam.serviceAccountTokenCreator` on the new SA so it can act as the SA when starting builds. This was discovered during PR-trigger verification — without these bindings, the PR trigger fires the GitHub check but cannot start a build (status = "fail" with 0 duration in `gh pr checks`, no build appears in `gcloud builds list`). Manual `gcloud builds triggers run` works without these bindings, but PR/comment-control triggers do not.
 
 ```bash
 SA=relaygate-desktop-ci@relayone-488319.iam.gserviceaccount.com
@@ -100,6 +100,22 @@ gcloud projects add-iam-policy-binding relayone-488319 \
 # Cross-project follow-up (F-C) would enable UBLA and let us tighten this.
 gcloud storage buckets add-iam-policy-binding gs://relayone-488319-public \
   --member="serviceAccount:$SA" --role="roles/storage.objectAdmin"
+
+# REQUIRED for PR-event triggers: Cloud Build's service agent must be
+# able to act as the new SA. Without these bindings, manual `triggers run`
+# works (because the caller's project owner role subsumes actAs) but PR
+# triggers and comment-control triggers fail at GitHub-check registration
+# with status "fail"/0s and no build is created.
+PROJECT_NUMBER=$(gcloud projects describe relayone-488319 --format='value(projectNumber)')
+CB_AGENT="service-${PROJECT_NUMBER}@gcp-sa-cloudbuild.iam.gserviceaccount.com"
+gcloud iam service-accounts add-iam-policy-binding "$SA" \
+  --project=relayone-488319 \
+  --member="serviceAccount:$CB_AGENT" \
+  --role="roles/iam.serviceAccountTokenCreator"
+gcloud iam service-accounts add-iam-policy-binding "$SA" \
+  --project=relayone-488319 \
+  --member="serviceAccount:$CB_AGENT" \
+  --role="roles/iam.serviceAccountUser"
 ```
 
 **Validate:**
