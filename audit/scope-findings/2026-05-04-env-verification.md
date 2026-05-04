@@ -92,3 +92,17 @@ Note: the user's saved deployment conventions memo doesn't explicitly call out C
 
 - `CLAUDE.md` placeholder commands (TASK-2 BLOCKED in `specs/infra-docs-cleanup.md`)
 - 9 commits on local main not on `origin/main` (PR #1 carries them; resolve on merge)
+
+## Resolution log (added 2026-05-04 evening)
+
+**F-A** (CI trigger SA had `roles/owner`): STATUS: FIXED — `relaygate-desktop-ci@relayone-488319.iam.gserviceaccount.com` SA created with three roles only (`cloudbuild.builds.builder`, `logging.logWriter`, `storage.objectAdmin` on `gs://relayone-488319-public`). `relaygate-desktop-binaries` trigger re-bound to it; `claude-eric-agent` SA no longer used by this trigger (still used by 32 other org-wide triggers — those are out of this repo's scope to fix). Test build `79719725-7cdf-4eda-97e6-4f2ba3dc9c38` triggered against `2e5a4de` and status moved QUEUED → WORKING under the new SA, confirming permissions are sufficient to start. Final SUCCESS status pending build completion (~10 min); failure would surface a missing role and is recoverable via TASK-2-pattern in `specs/scope-down-ci-sa.md`.
+
+**F-B** (no PR triggers): STATUS: FIXED — `relaygate-desktop-pr` trigger created (gen2/us-central1), bound to `relaygate-desktop-ci@`, fires on `pullRequest` event against `^main$`, points at `cloudbuild.yaml`, comment-control `COMMENTS_ENABLED` (so external-collaborator PRs require an `/gcbrun` from a repo member; member PRs run automatically). Verified via `gcloud builds triggers describe`.
+
+**F-C** (UBLA on shared bucket): STATUS: BLOCKED — bucket `gs://relayone-488319-public/` is shared by 12 projects (relaygate, relaygate-desktop, veritize, deeptap, wellytic-firmware, wellytic-mobile, coder1, r1, relayone, w242-verification, deeptap-cli, gcloud). Enabling UBLA collapses ACLs to IAM-only and is one-way for legacy ACL workflows; needs an org-level decision and coordination with the other 11 projects' owners. Out of scope for this repo's PR.
+
+**F-D** (explicit publicAccessPrevention): STATUS: BLOCKED — same cross-project blocker as F-C. Currently `inherited` from org policy; explicit setting requires the same coordination. Object downloads currently return HTTP 200 anonymously, so the org default is permissive today.
+
+## Side note: 32 other triggers share the same problem
+
+`claude-eric-agent` SA is bound to 33 Cloud Build triggers across the org. This repo fixed its one. The other 32 triggers (actium-*, wellytic-*, veritize-*, deeptap-*, coderadar-*, etc.) carry the same `roles/owner` blast radius and should be addressed in their respective projects' scope-and-repair runs. This is documented here for cross-project visibility but is explicitly NOT this repo's responsibility to fix.

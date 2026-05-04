@@ -15,9 +15,17 @@ There is no staging environment and no production environment in the conventiona
 The following must exist before a fresh deployment will succeed end to end. Substitute project names and bucket names appropriately if forking this repo.
 
 - **GCP project**: `relayone-488319` (or fork-equivalent). The Cloud Build API must be enabled on the project (`gcloud services enable cloudbuild.googleapis.com`).
-- **Cloud Build trigger** named `relaygate-desktop-main` (or equivalent), source = GitHub `RelayOne/relaygate-desktop`, event = push to branch `main`, build config = `cloudbuild.yaml`. The trigger was wired in commit `e1b12fa` (closeout commit).
-- **GCS bucket**: `gs://relayone-488319-public/` exists and is configured with public-read on the `relaygate-desktop/latest/*` and `relaygate-desktop/{sha}/*` prefixes (uniform bucket-level access plus an `allUsers:objectViewer` IAM binding scoped to that path is the recommended pattern; alternatively per-object ACLs).
-- **Service account** attached to the Cloud Build trigger has `roles/storage.objectAdmin` on the bucket so it can write the `{sha}/`, `latest/`, and `build-{BUILD_ID}/` paths.
+- **Cloud Build triggers** (two of them, both gen2, both in `us-central1`):
+  - `relaygate-desktop-binaries` — fires on push to `main` → publishes to `gs://...{SHORT_SHA}/` AND mirrors to `latest/`. The trigger was wired in commit `e1b12fa` (closeout) and re-bound to a dedicated SA in commit `<this-spec>`.
+  - `relaygate-desktop-pr` — fires on PR open/update against `main` → publishes to `gs://...{SHORT_SHA}/` only (does NOT overwrite `latest/`); enables reviewers to verify cross-platform binaries before merge. Comment-control is `COMMENTS_ENABLED`, so PRs from external collaborators require an `/gcbrun` comment from a repo collaborator before the build runs; PRs from members run automatically.
+  - Both triggers reference build config `cloudbuild.yaml` and source the GitHub repo via the `relayone-github-conn` connection's `relaygate-desktop-repo` mapping.
+- **GCS bucket**: `gs://relayone-488319-public/` exists and is configured with public-read on the `relaygate-desktop/latest/*` and `relaygate-desktop/{sha}/*` prefixes via `allUsers:objectViewer` at the bucket level. Uniform-bucket-level-access (UBLA) is currently OFF on the bucket; the bucket is shared with 11 other projects, so flipping UBLA is a cross-project decision tracked separately.
+- **Cloud Build trigger service account** (dedicated to this repo's CI, scoped down from the org-wide `claude-eric-agent` SA used elsewhere): `relaygate-desktop-ci@relayone-488319.iam.gserviceaccount.com` holds exactly:
+  - `roles/cloudbuild.builds.builder` (project-level — required for Cloud Build to spin up workers, fetch source, and run steps)
+  - `roles/logging.logWriter` (project-level — required for Cloud Build log streaming)
+  - `roles/storage.objectAdmin` on `gs://relayone-488319-public` (bucket-level — required to publish artifacts under `relaygate-desktop/{sha}/` and the `latest/` mirror)
+
+  This SA has NO project-level `owner`/`editor`, NO Secret Manager access, NO Cloud SQL or Compute permissions, and NO IAM admin. Compromise of a CI build (npm supply-chain, base image takeover, etc.) is contained to "can publish artifacts to the public bucket." Recovery from such compromise is: drop the SA's bucket binding, recreate the SA fresh, re-bind the triggers — no other service in the project is at risk.
 - **GitHub repo connection**: the trigger's GitHub source binding must be authorized via the Cloud Build GitHub App (one-time setup per project).
 - **Mac signed-DMG path only**: a macOS host reachable over SSH on the public internet (or via a bastion), plus Secret Manager entries listed in the "Mac signed/notarized DMG (future state)" section below. Without these, `cloudbuild-mac.yaml` exits 0 with a "skipping" log line — it is intentionally a no-op until provisioned.
 - **Local-build prerequisites**: Node 20.18.1 (per `.nvmrc`), `nvm` or equivalent, and a working `npm ci` against the committed lockfile. Linux developers cross-compiling Windows installers locally additionally need `wine` and `mono` installed; macOS developers building DMGs additionally need Xcode Command Line Tools.
@@ -39,11 +47,11 @@ No application-side environment variables are baked into the build. `RELAYGATE_D
 
 ## Build (CI)
 
-The trigger fires automatically on every push to `main`. To kick off a build manually (e.g., to retry a failed run on the same commit):
+The `relaygate-desktop-binaries` trigger fires automatically on every push to `main`; the `relaygate-desktop-pr` trigger fires on PR open/update against `main`. To kick off a build manually (e.g., to retry a failed run on the same commit):
 
 ```bash
-gcloud builds triggers run relaygate-desktop-main \
-  --branch=main --project=relayone-488319
+gcloud builds triggers run relaygate-desktop-binaries \
+  --branch=main --project=relayone-488319 --region=us-central1
 ```
 
 Pipeline steps in `cloudbuild.yaml`, in execution order (each step's `waitFor` is a strict barrier — the pipeline is fully serial because each step consumes the previous step's `release/` directory):
