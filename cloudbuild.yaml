@@ -60,9 +60,21 @@ steps:
       - |
         set -euxo pipefail
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq
-        apt-get install -y -qq git cmake build-essential libssl-dev libbz2-dev \
-          zlib1g-dev unzip hfsprogs file 2>&1 | tail -1
+        # Retry apt up to 3x with --fix-missing — Ubuntu archive mirrors
+        # flake intermittently (PR build ad85669c failed on transient
+        # "Unable to fetch some archives"). Manual /gcbrun retry unreliable
+        # for this trigger, so make the install itself self-healing.
+        attempt=0
+        until apt-get update -qq && apt-get install -y -qq --fix-missing \
+            git cmake build-essential libssl-dev libbz2-dev \
+            zlib1g-dev unzip hfsprogs file; do
+          attempt=$$((attempt + 1))
+          if [ "$$attempt" -ge 3 ]; then
+            echo "ERROR: apt failed 3 times" >&2; exit 1
+          fi
+          echo "apt attempt $$attempt failed, retrying in 10s..."
+          sleep 10
+        done
 
         cd /tmp
         # Mozilla fork ships both `dmg` (UDIF writer) and `hfsplus` (userspace
