@@ -1,0 +1,2 @@
+.claude/scripts/codex-review.sh: line 67: TO: command not found
+{"verdict":"fail","summary":"Codex rate limited","confidence":0,"findings":[],"files_reviewed":[],"error_type":"rate_limit"}

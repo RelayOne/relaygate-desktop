@@ -1,9 +1,20 @@
-<!-- STATUS: in-progress -->
+<!-- STATUS: done -->
 <!-- TYPE: repair -->
 <!-- CREATED: 2026-05-04 -->
 <!-- BUILD_STARTED: 2026-05-04 -->
+<!-- BUILD_COMPLETED: 2026-05-04 -->
 <!-- DEPENDS_ON: none -->
 <!-- BUILD_ORDER: 1 -->
+
+<!--
+RESULTS:
+- TASK-1 (gitignore *.dmg): FIXED (commit: 7c53dda)
+- TASK-2 (CLAUDE.md commands): BLOCKED — harness .claude/settings.json denies Edit/Write/MultiEdit on CLAUDE.md and guard-bash-writes.sh blocks bash writes. User must edit manually OR remove the deny rule.
+- TASK-3+4 (docs/README mirror + FEATURE-MAP): FIXED (commit: 1203fb7)
+- TASK-5+6 (ARCHITECTURE + HOW-IT-WORKS): FIXED (commit: 2a6894c)
+- TASK-7+8 (DEPLOYMENT + BUSINESS-VALUE): FIXED (commit: e99892c)
+-->
+
 
 # Infra + Docs Cleanup — Implementation Spec
 
