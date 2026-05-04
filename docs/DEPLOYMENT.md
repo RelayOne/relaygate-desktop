@@ -16,7 +16,7 @@ The following must exist before a fresh deployment will succeed end to end. Subs
 
 - **GCP project**: `relayone-488319` (or fork-equivalent). The Cloud Build API must be enabled on the project (`gcloud services enable cloudbuild.googleapis.com`).
 - **Cloud Build triggers** (two of them, both gen2, both in `us-central1`):
-  - `relaygate-desktop-binaries` — fires on push to `main` → publishes to `gs://...{SHORT_SHA}/` AND mirrors to `latest/`. The trigger was wired in commit `e1b12fa` (closeout) and re-bound to a dedicated SA in commit `<this-spec>`.
+  - `relaygate-desktop-binaries` — fires on push to `main` → publishes to `gs://...{SHORT_SHA}/` AND mirrors to `latest/`. The trigger was wired in commit `e1b12fa` (closeout) and re-bound to a dedicated SA in commit `2ebbdba`.
   - `relaygate-desktop-pr` — fires on PR open/update against `main` → publishes to `gs://...{SHORT_SHA}/` only (does NOT overwrite `latest/`); enables reviewers to verify cross-platform binaries before merge. Comment-control is `COMMENTS_ENABLED`, so PRs from external collaborators require an `/gcbrun` comment from a repo collaborator before the build runs; PRs from members run automatically.
   - Both triggers reference build config `cloudbuild.yaml` and source the GitHub repo via the `relayone-github-conn` connection's `relaygate-desktop-repo` mapping.
 - **GCS bucket**: `gs://relayone-488319-public/` exists and is configured with public-read on the `relaygate-desktop/latest/*` and `relaygate-desktop/{sha}/*` prefixes via `allUsers:objectViewer` at the bucket level. Uniform-bucket-level-access (UBLA) is currently OFF on the bucket; the bucket is shared with 11 other projects, so flipping UBLA is a cross-project decision tracked separately.
