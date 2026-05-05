@@ -36,12 +36,15 @@ relaygate-desktop/
 │   │                            # notification permission allowlist
 │   ├── preload.ts               # contextBridge exposing window.relaygate.{version,
 │   │                            # commit, env, platform, arch, gateway.*} read-only
-│   └── gateway/
-│       ├── types.ts             # Public type contract (no electron imports)
-│       ├── controller.ts        # GatewayController class — child_process.spawn of the
-│       │                        # relaygate Go binary, log ring, state machine
-│       └── storage.ts           # BinaryPathStore interface; SafeStorage-backed +
-│                                # in-memory implementations
+│   ├── gateway/
+│   │   ├── types.ts             # Public type contract (no electron imports)
+│   │   ├── controller.ts        # GatewayController class — child_process.spawn of the
+│   │   │                        # relaygate Go binary, log ring, state machine
+│   │   └── storage.ts           # BinaryPathStore interface; SafeStorage-backed +
+│   │                            # in-memory implementations
+│   ├── tray.ts                  # createTray + buildTrayMenu (Electron-side)
+│   └── tray-menu-logic.ts       # Pure menu-state helpers (no electron imports;
+│                                # statusLabel + trayMenuEnabledFlags for unit tests)
 ├── tests/
 │   ├── smoke.test.ts            # Minimal CDP-attached render check; builds, launches
 │   │                            # Electron with --remote-debugging-port, asserts non-
@@ -50,6 +53,8 @@ relaygate-desktop/
 │   │                            # (signin, dashboard, mobile viewport, SEO meta)
 │   ├── gateway.test.ts          # GatewayController unit-style integration test
 │   │                            # (no Electron — runs under tsx)
+│   ├── tray-menu.test.ts        # 16-assertion unit test for tray-menu-logic
+│   │                            # (statusLabel + trayMenuEnabledFlags state matrix)
 │   ├── notifications.test.ts    # setPermissionRequestHandler allowlist probe
 │   └── fixtures/
 │       ├── mock-relaygate.js    # Mock relaygate binary for gateway.test.ts
