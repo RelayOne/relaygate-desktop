@@ -1,5 +1,13 @@
 timeout: 3600s
 
+substitutions:
+  # _ENV namespaces published artifacts by environment so dev/staging/prod
+  # builds don't share the GCS path. Default 'prod' so the existing
+  # relaygate-desktop-binaries (push to main) trigger keeps working
+  # unchanged. Dev/staging triggers override via --substitutions=_ENV=...
+  # See specs/cloudbuild-env-paths.md for the full path scheme.
+  _ENV: 'prod'
+
 options:
   machineType: E2_HIGHCPU_8
   logging: CLOUD_LOGGING_ONLY
@@ -171,23 +179,34 @@ steps:
       - -c
       - |
         set -euxo pipefail
-        # Detect PR builds: $TRIGGER_NAME is "relaygate-desktop-pr" for PRs,
-        # "relaygate-desktop-binaries" for push-to-main. PR builds publish
-        # only to /{SHORT_SHA}/ for review; main builds also mirror /latest/.
-        # (Pre-fix, both wrote /latest/ — PR success would clobber the
-        # production download mirror with PR-head artifacts.)
+        # Per-environment artifact paths. The trigger sets _ENV via
+        # substitutions (prod/staging/dev); default 'prod' lets the existing
+        # main push trigger work unchanged. Path scheme:
+        #   {ENV}/{SHORT_SHA}/   — immutable per-build
+        #   {ENV}/latest/         — mutable env mirror (skipped on PR builds)
+        #   latest/               — legacy prod mirror, ONLY when _ENV=prod,
+        #                           kept for backward-compat with the landing
+        #                           page links until those migrate to /prod/latest/.
+        # See specs/cloudbuild-env-paths.md for the full design.
+        #
+        # PR-mode detection: $TRIGGER_NAME starts with "relaygate-desktop-pr"
+        # (covers prod -pr, -pr-dev, -pr-staging). PR builds publish only to
+        # the per-build path; no env mirror, no legacy mirror.
         IS_PR_BUILD=false
-        if [ "$TRIGGER_NAME" = "relaygate-desktop-pr" ]; then
+        if [[ "$TRIGGER_NAME" == relaygate-desktop-pr* ]]; then
           IS_PR_BUILD=true
-          echo "PR build detected ($TRIGGER_NAME) — skipping latest/ mirror"
+          echo "PR build detected ($TRIGGER_NAME) — skipping latest/ mirrors"
         fi
         published=0
         for f in release/*.AppImage release/*.deb release/*.exe release/*-mac.zip release/*.dmg; do
           [ -e "$$f" ] || continue
           base="$$(basename "$$f")"
-          gcloud storage cp "$$f" "gs://relayone-488319-public/relaygate-desktop/$SHORT_SHA/$$base"
+          gcloud storage cp "$$f" "gs://relayone-488319-public/relaygate-desktop/${_ENV}/$SHORT_SHA/$$base"
           if [ "$$IS_PR_BUILD" != "true" ]; then
-            gcloud storage cp "$$f" "gs://relayone-488319-public/relaygate-desktop/latest/$$base"
+            gcloud storage cp "$$f" "gs://relayone-488319-public/relaygate-desktop/${_ENV}/latest/$$base"
+            if [ "${_ENV}" = "prod" ]; then
+              gcloud storage cp "$$f" "gs://relayone-488319-public/relaygate-desktop/latest/$$base"
+            fi
           fi
           sha256sum "$$f" | tee -a release/SHA256SUMS.txt
           published=$$((published + 1))
@@ -196,11 +215,14 @@ steps:
           echo "ERROR: expected at least 7 artifacts (linux x4, mac.zip x2, mac.dmg x2, win), got $$published" >&2
           exit 1
         fi
-        gcloud storage cp release/SHA256SUMS.txt "gs://relayone-488319-public/relaygate-desktop/$SHORT_SHA/SHA256SUMS.txt"
+        gcloud storage cp release/SHA256SUMS.txt "gs://relayone-488319-public/relaygate-desktop/${_ENV}/$SHORT_SHA/SHA256SUMS.txt"
         if [ "$$IS_PR_BUILD" != "true" ]; then
-          gcloud storage cp release/SHA256SUMS.txt "gs://relayone-488319-public/relaygate-desktop/latest/SHA256SUMS.txt"
+          gcloud storage cp release/SHA256SUMS.txt "gs://relayone-488319-public/relaygate-desktop/${_ENV}/latest/SHA256SUMS.txt"
+          if [ "${_ENV}" = "prod" ]; then
+            gcloud storage cp release/SHA256SUMS.txt "gs://relayone-488319-public/relaygate-desktop/latest/SHA256SUMS.txt"
+          fi
         fi
-        gcloud storage ls "gs://relayone-488319-public/relaygate-desktop/$SHORT_SHA/"
+        gcloud storage ls "gs://relayone-488319-public/relaygate-desktop/${_ENV}/$SHORT_SHA/"
 
 artifacts:
   objects:
