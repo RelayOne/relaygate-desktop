@@ -36,7 +36,7 @@ What the user actually sees and interacts with after launching the app. The shel
 | Build SHA exposed at runtime | Users can report exact build version when filing bugs — visible via `window.relaygate.version` from the preload bridge | Done | `src/preload.ts` |
 | Native gateway control panel | Manage a locally-running `relaygate` CLI gateway (start/stop, view logs, edit routing rules) without leaving the app | Done | `src/gateway/` (controller + storage + types) + `window.relaygate.gateway.*` preload bridge |
 | OS notifications | Get notified of relay events, budget alerts, or provider outages without keeping the window focused | Done | `src/main.ts` (setAppUserModelId + setPermissionRequestHandler allowlist) |
-| System tray icon | Quick access to start/stop the local gateway from the menu bar / system tray | Scoped | `specs/system-tray-icon.md` |
+| System tray icon | Quick access to start/stop the local gateway from the menu bar / system tray | Done | `src/tray.ts` + `src/tray-menu-logic.ts` (Linux StatusNotifierItem fallback to default quit-on-close) |
 
 ## Security
 
