@@ -31,7 +31,7 @@ STATUS: FIXED (commit: 8cd7ba2 — audit trail; the underlying IAM change is a g
 
 ## Smoke test wired into CI
 
-STATUS: FIXED (commit: 37164f2 — PR #5 open, awaiting merge) — `cloudbuild.yaml` gets a new `smoke-test` step between `build-main` and `dist-all-platforms`. Uses `node:20` + apt installs `xvfb` + Chromium runtime libs + runs `xvfb-run npm run test:smoke` with 3-attempt retry and 15s backoff. Step is blocking (broken builds never publish). Tradeoff: couples CI reliability to `app.relaygate.ai` uptime — three-attempt retry handles transient flakes, sustained outages will block builds (correct fail-closed behavior). FEATURE-MAP "CI-integrated test run" Horizon → Done. Test artifacts (PNG screenshots, JSON results, log) now collected to `gs://...build-{BUILD_ID}/` for post-mortem.
+STATUS: FIXED (commit: 8cd7ba2 — audit trail; the implementation lives on `feat/smoke-in-ci` at commit 37164f2, open as PR #5 awaiting merge) — `cloudbuild.yaml` gets a new `smoke-test` step between `build-main` and `dist-all-platforms`. Uses `node:20` + apt installs `xvfb` + Chromium runtime libs + runs `xvfb-run npm run test:smoke` with 3-attempt retry and 15s backoff. Step is blocking (broken builds never publish). Tradeoff: couples CI reliability to `app.relaygate.ai` uptime — three-attempt retry handles transient flakes, sustained outages will block builds (correct fail-closed behavior). FEATURE-MAP "CI-integrated test run" Horizon → Done. Test artifacts (PNG screenshots, JSON results, log) now collected to `gs://...build-{BUILD_ID}/` for post-mortem.
 
 ## Final state
 
