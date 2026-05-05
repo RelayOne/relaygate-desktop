@@ -184,7 +184,8 @@ adjust client behavior based on which environment the desktop wrapper
 was built for.
 
 Before the first window opens, the main process also installs a
-permission-request handler on the default Electron `session`. By default
+permission-request handler on the default Electron `session` via
+`session.defaultSession.setPermissionRequestHandler(...)`. By default
 Chromium denies every renderer-initiated permission request silently
 (camera, microphone, geolocation, clipboard read, MIDI, etc.). This is
 correct posture for a wrapped third-party dashboard. The one permission
