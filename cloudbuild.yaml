@@ -60,9 +60,21 @@ steps:
       - |
         set -euxo pipefail
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq
-        apt-get install -y -qq git cmake build-essential libssl-dev libbz2-dev \
-          zlib1g-dev unzip hfsprogs file 2>&1 | tail -1
+        # Retry apt up to 3x with --fix-missing — Ubuntu archive mirrors
+        # flake intermittently (PR build ad85669c failed on transient
+        # "Unable to fetch some archives"). Manual /gcbrun retry unreliable
+        # for this trigger, so make the install itself self-healing.
+        attempt=0
+        until apt-get update -qq && apt-get install -y -qq --fix-missing \
+            git cmake build-essential libssl-dev libbz2-dev \
+            zlib1g-dev unzip hfsprogs file; do
+          attempt=$$((attempt + 1))
+          if [ "$$attempt" -ge 3 ]; then
+            echo "ERROR: apt failed 3 times" >&2; exit 1
+          fi
+          echo "apt attempt $$attempt failed, retrying in 10s..."
+          sleep 10
+        done
 
         cd /tmp
         # Mozilla fork ships both `dmg` (UDIF writer) and `hfsplus` (userspace
@@ -113,12 +125,24 @@ steps:
       - -c
       - |
         set -euxo pipefail
+        # Detect PR builds: $TRIGGER_NAME is "relaygate-desktop-pr" for PRs,
+        # "relaygate-desktop-binaries" for push-to-main. PR builds publish
+        # only to /{SHORT_SHA}/ for review; main builds also mirror /latest/.
+        # (Pre-fix, both wrote /latest/ — PR success would clobber the
+        # production download mirror with PR-head artifacts.)
+        IS_PR_BUILD=false
+        if [ "$TRIGGER_NAME" = "relaygate-desktop-pr" ]; then
+          IS_PR_BUILD=true
+          echo "PR build detected ($TRIGGER_NAME) — skipping latest/ mirror"
+        fi
         published=0
         for f in release/*.AppImage release/*.deb release/*.exe release/*-mac.zip release/*.dmg; do
           [ -e "$$f" ] || continue
           base="$$(basename "$$f")"
           gcloud storage cp "$$f" "gs://relayone-488319-public/relaygate-desktop/$SHORT_SHA/$$base"
-          gcloud storage cp "$$f" "gs://relayone-488319-public/relaygate-desktop/latest/$$base"
+          if [ "$$IS_PR_BUILD" != "true" ]; then
+            gcloud storage cp "$$f" "gs://relayone-488319-public/relaygate-desktop/latest/$$base"
+          fi
           sha256sum "$$f" | tee -a release/SHA256SUMS.txt
           published=$$((published + 1))
         done
@@ -127,7 +151,9 @@ steps:
           exit 1
         fi
         gcloud storage cp release/SHA256SUMS.txt "gs://relayone-488319-public/relaygate-desktop/$SHORT_SHA/SHA256SUMS.txt"
-        gcloud storage cp release/SHA256SUMS.txt "gs://relayone-488319-public/relaygate-desktop/latest/SHA256SUMS.txt"
+        if [ "$$IS_PR_BUILD" != "true" ]; then
+          gcloud storage cp release/SHA256SUMS.txt "gs://relayone-488319-public/relaygate-desktop/latest/SHA256SUMS.txt"
+        fi
         gcloud storage ls "gs://relayone-488319-public/relaygate-desktop/$SHORT_SHA/"
 
 artifacts:
