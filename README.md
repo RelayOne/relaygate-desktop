@@ -83,3 +83,8 @@ relaygate-desktop/
 ## Build SHA in app
 
 Each build embeds its commit SHA via `electron-builder` `--config.extraMetadata.commit=$COMMIT_SHA` (set in `cloudbuild.yaml`). Visible at runtime via `window.relaygate.version` from the preload bridge.
+
+## Environments
+
+Single-branch model: `main` is the only env branch; protected against force-push and deletion (per portfolio spec 07).
+
