@@ -95,6 +95,23 @@ To upload a locally produced artifact to the public bucket (e.g., to test the pu
 
 When all five are in place, every push to `main` triggers BOTH pipelines in parallel: the Linux pipeline produces the unsigned cross-compile set as today, and the mac pipeline SSHes to the macOS host, clones the repo at `$COMMIT_SHA`, runs `npm ci && npm run typecheck && npm run build && npm run dist:mac` (which uses `electron-builder.mac.yml` with `hardenedRuntime: true` and picks up `CSC_LINK`/`CSC_KEY_PASSWORD` from the host's environment), then `scp`s the signed `.dmg` files back to the Cloud Build workspace and publishes them to GCS — overwriting the unsigned DMGs from the Linux pipeline. Until the mac host exists, the trigger no-ops with `_MAC_RUNNER_HOST` empty (the pipeline checks for empty and exits 0 with a "skipping" message).
 
+## Per-environment artifact paths
+
+Every published artifact lands at a path that includes its build environment so dev, staging, and prod artifacts never share storage. The trigger sets the environment via the `_ENV` Cloud Build substitution (`prod`, `staging`, or `dev`). The `cloudbuild.yaml` defaults `_ENV` to `prod` so any standalone `gcloud builds submit` run, plus the prod main-push trigger that does not set `_ENV` explicitly, still produce prod-shaped paths.
+
+| Trigger | Branch / event | `_ENV` | Per-build path | "Latest" mirrors |
+|---|---|---|---|---|
+| `relaygate-desktop-binaries` | push to `main` | `prod` (default) | `relaygate-desktop/prod/{SHORT_SHA}/` | `relaygate-desktop/prod/latest/` AND legacy `relaygate-desktop/latest/` |
+| `relaygate-desktop-binaries-staging` | push to `staging` | `staging` | `relaygate-desktop/staging/{SHORT_SHA}/` | `relaygate-desktop/staging/latest/` |
+| `relaygate-desktop-binaries-dev` | push to `dev` | `dev` | `relaygate-desktop/dev/{SHORT_SHA}/` | `relaygate-desktop/dev/latest/` |
+| `relaygate-desktop-pr` | PR → `main` | `prod` (default) | `relaygate-desktop/prod/{SHORT_SHA}/` | none (PR builds skip mirrors) |
+| `relaygate-desktop-pr-staging` | PR → `staging` | `staging` | `relaygate-desktop/staging/{SHORT_SHA}/` | none |
+| `relaygate-desktop-pr-dev` | PR → `dev` | `dev` | `relaygate-desktop/dev/{SHORT_SHA}/` | none |
+
+The legacy `relaygate-desktop/latest/` mirror remains for prod builds only because the public landing page (`relaygate.ai`, separate codebase) currently links the bare `/latest/` path: `https://storage.googleapis.com/relayone-488319-public/relaygate-desktop/latest/RelayGate-Setup-0.1.0.exe` and friends. Migrating those links to `/prod/latest/` is a downstream change tracked separately; until then, the prod publish step writes to BOTH the new env-prefixed path and the bare path so the link-shortening can happen at any time without coordinated cutover.
+
+PR builds skip both the env mirror AND the legacy mirror unconditionally — a PR's artifacts only ever land at `${_ENV}/{SHORT_SHA}/` so reviewers can fetch them by SHA but no human-bookmarked URL ever resolves to a PR-head build. The PR-mode detection uses a `[[ "$TRIGGER_NAME" == relaygate-desktop-pr* ]]` glob so the prod, staging, and dev PR triggers all share the skip behavior.
+
 ## Infrastructure
 
 - **GCS bucket**: `gs://relayone-488319-public/relaygate-desktop/` with public-read on `latest/*` and `{sha}/*` paths. No CDN in front — direct GCS download. GCS multi-regional / dual-regional class is fine for the scale here; single-region is also fine. No object lifecycle rules in place today; old `{sha}/` prefixes accumulate indefinitely. (Adding a 90-day lifecycle rule is a sensible Horizon item.)
