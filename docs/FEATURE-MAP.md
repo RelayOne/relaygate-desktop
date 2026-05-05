@@ -70,7 +70,7 @@ Two test suites, both end-to-end via Puppeteer attaching to Electron over the Ch
 |---|---|---|---|
 | Puppeteer-CDP smoke test | Catch regressions where the dashboard fails to render in our exact Electron + Chromium build (catches Electron upgrade breakage) | Done | `tests/smoke.test.ts` |
 | Live-dashboard regression suite | Catches if `app.relaygate.ai` ships a change that breaks the desktop wrapper (signin, dashboard render, mobile viewport, SEO meta) | Done | `tests/live-dashboard.test.ts` |
-| CI-integrated test run | Smoke tests gate every Cloud Build — broken builds never publish to GCS | Horizon | — (currently smoke runs locally only; needs Xvfb in the dist-all-platforms container) |
+| CI-integrated test run | Smoke tests gate every Cloud Build — broken builds never publish to GCS | Done | `cloudbuild.yaml:smoke-test` (xvfb-run + 3-attempt retry; runs between `build-main` and `dist-all-platforms`) |
 | Cross-platform smoke (one per OS) | Catch regressions specific to one platform's Electron+Chromium combination (currently only Linux is auto-tested) | Horizon | — |
 
 ## Documentation

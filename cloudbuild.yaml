@@ -34,9 +34,55 @@ steps:
         set -euxo pipefail
         npm run build
 
+  - name: 'node:20'
+    id: smoke-test
+    waitFor: ['build-main']
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euxo pipefail
+        # Headless-Electron smoke test (Puppeteer-CDP attach against the live
+        # dashboard). Catches Electron-upgrade regressions and dashboard-side
+        # JS breakage before we waste cycles on the 5-platform cross-compile.
+        # Couples CI reliability to app.relaygate.ai uptime — that's a known
+        # tradeoff documented in docs/FEATURE-MAP.md (Testing > CI-integrated).
+        # Retry up to 3x with backoff to absorb transient network/dashboard
+        # flake without making the step fail-closed on intermittent 500s.
+
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq
+
+        # Chromium runtime deps + xvfb for headless display
+        apt-get install -y -qq --fix-missing \
+          xvfb \
+          libgtk-3-0 libgbm1 libnss3 libasound2 libxss1 libxshmfence1 \
+          libcups2 libdrm2 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+          libpango-1.0-0 libcairo2 libatk-bridge2.0-0 libatk1.0-0 \
+          libxkbcommon0 fonts-liberation > /dev/null 2>&1
+
+        # Smoke test starts an Electron with --remote-debugging-port and
+        # attaches via CDP. SUID sandbox needs root; --no-sandbox is set in
+        # tests/smoke.test.ts. ELECTRON_DISABLE_SANDBOX is belt-and-suspenders.
+        export ELECTRON_DISABLE_SANDBOX=1
+
+        attempt=0
+        until xvfb-run -a --server-args="-screen 0 1280x1024x24" npm run test:smoke; do
+          attempt=$((attempt + 1))
+          if [ "$attempt" -ge 3 ]; then
+            echo "ERROR: smoke test failed 3 times" >&2
+            ls -la tests/artifacts/ || true
+            exit 1
+          fi
+          echo "smoke attempt $attempt failed, retrying in 15s..."
+          sleep 15
+        done
+        echo "✓ smoke test passed on attempt $((attempt + 1))"
+        ls -la tests/artifacts/ || true
+
   - name: 'electronuserland/builder:wine-mono'
     id: dist-all-platforms
-    waitFor: ['build-main']
+    waitFor: ['smoke-test']
     entrypoint: bash
     args:
       - -c
@@ -166,3 +212,6 @@ artifacts:
       - 'release/*-mac.zip'
       - 'release/*.dmg'
       - 'release/SHA256SUMS.txt'
+      - 'tests/artifacts/*.png'
+      - 'tests/artifacts/*.json'
+      - 'tests/artifacts/*.log'
