@@ -159,11 +159,29 @@ before calling `win.loadURL(DASHBOARD_URL)`.
 `DASHBOARD_URL` itself is computed by `resolveDashboardUrl()`, which reads
 `RELAYGATE_DESKTOP_URL` from the environment, parses it through the WHATWG
 `URL` constructor, rejects anything that is not `http:` or `https:`, and
-falls back to `https://app.relaygate.ai` on any error. The preload script
-(`src/preload.ts`) runs in its own isolated world and uses
-`contextBridge.exposeInMainWorld("relaygate", desktopBridge)` to expose a
-tiny read-only object containing `version`, `platform`, and `arch` to the
-renderer.
+falls back to an env-aware default URL on any error. The default is
+selected at module-load time by `readBuildEnv()`, which loads the bundled
+`package.json` (placed at `<bundle>/package.json` by electron-builder, with
+the `env` field set via `--config.extraMetadata.env=${_ENV}` in
+`cloudbuild.yaml`'s `dist-all-platforms` step) and reads its `env` field.
+A `dev`-built binary defaults to `https://app.dev.relaygate.ai`, a
+`staging` build defaults to `https://app.staging.relaygate.ai`, and any
+other value (including missing field, parse failure, or `prod`) defaults
+to `https://app.relaygate.ai`. The precedence chain is therefore
+`RELAYGATE_DESKTOP_URL` env var > embedded `package.json:env` > prod
+fallback — testers running pre-prod builds connect to the matching
+pre-prod dashboard automatically with zero env-var setup, while
+developers can still point a prod-built binary at localhost or a
+custom origin via the env var override without rebuilding.
+
+The preload script (`src/preload.ts`) runs in its own isolated world and
+uses `contextBridge.exposeInMainWorld("relaygate", desktopBridge)` to
+expose a tiny read-only object containing `version`, `commit`, `env`,
+`platform`, and `arch` to the renderer. The `version` and `commit`
+fields anchor bug reports to a specific source revision; the `env` field
+lets the dashboard render an "Connected to dev/staging/prod" badge or
+adjust client behavior based on which environment the desktop wrapper
+was built for.
 
 **Step 6, interactions.** The dashboard JavaScript inside the renderer
 makes XHR and `fetch` calls directly to `api.relaygate.ai` over HTTPS.
