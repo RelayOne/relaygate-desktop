@@ -9,6 +9,7 @@ import {
   LogLine,
   BinaryValidation,
 } from "./types";
+import type { BinaryPathStore } from "./storage";
 
 // Maximum buffered log lines. Older lines are dropped silently with a
 // single [truncated] marker emitted on overflow. Bounded so the gateway
@@ -43,13 +44,13 @@ export class GatewayController {
   private listenAddr: string | null = null;
   private lastError: string | null = null;
   private readonly opts: GatewayControllerOpts;
-  private readonly storagePath: string;
+  private readonly store: BinaryPathStore;
   private firstStderrSeen = false;
 
-  constructor(opts: GatewayControllerOpts, storageDir: string) {
+  constructor(opts: GatewayControllerOpts, store: BinaryPathStore) {
     this.opts = opts;
-    this.storagePath = path.join(storageDir, "gateway-binary-path.txt");
-    this.binaryPath = this.readStoredPath();
+    this.store = store;
+    this.binaryPath = this.loadStoredPath();
   }
 
   getStatus(): GatewayStatus {
@@ -124,7 +125,7 @@ export class GatewayController {
     const version = m[1];
     this.binaryPath = absPath;
     this.binaryVersion = version;
-    this.writeStoredPath(absPath);
+    this.store.write(absPath);
     this.emitState();
     return { valid: true, version, error: null };
   }
@@ -250,45 +251,27 @@ export class GatewayController {
     this.opts.onStateChange(this.getStatus());
   }
 
-  private readStoredPath(): string | null {
+  private loadStoredPath(): string | null {
+    const raw = this.store.read();
+    if (!raw) return null;
+    // Re-validate on load: file may have been removed/upgraded since persist.
     try {
-      const raw = fs.readFileSync(this.storagePath, "utf8").trim();
-      if (!raw) return null;
-      // Re-validate on every load: file may have been removed/upgraded.
-      try {
-        const stat = fs.statSync(raw);
-        if (stat.isFile()) {
-          const probe = spawnSync(raw, ["--version"], {
-            timeout: 5000,
-            encoding: "utf8",
-            env: { PATH: CURATED_PATH },
-            shell: false,
-          });
-          const combined = `${probe.stdout ?? ""}\n${probe.stderr ?? ""}`;
-          const m = VERSION_REGEX.exec(combined);
-          if (m) {
-            this.binaryVersion = m[1];
-            return raw;
-          }
-        }
-      } catch {
-        // fall through to null
-      }
-      return null;
+      const stat = fs.statSync(raw);
+      if (!stat.isFile()) return null;
     } catch {
       return null;
     }
-  }
-
-  private writeStoredPath(absPath: string): void {
-    try {
-      fs.mkdirSync(path.dirname(this.storagePath), { recursive: true });
-      fs.writeFileSync(this.storagePath, absPath, "utf8");
-    } catch (err) {
-      process.stderr.write(
-        `[gateway] failed to persist binary path: ${(err as Error).message}\n`,
-      );
-    }
+    const probe = spawnSync(raw, ["--version"], {
+      timeout: 5000,
+      encoding: "utf8",
+      env: { PATH: CURATED_PATH },
+      shell: false,
+    });
+    const combined = `${probe.stdout ?? ""}\n${probe.stderr ?? ""}`;
+    const m = VERSION_REGEX.exec(combined);
+    if (!m) return null;
+    this.binaryVersion = m[1];
+    return raw;
   }
 }
 
