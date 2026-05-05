@@ -1,9 +1,11 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, shell } from "electron";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { GatewayController } from "./gateway/controller";
 import { SafeStorageBinaryPathStore } from "./gateway/storage";
+import { createTray } from "./tray";
+import type { GatewayStatus } from "./gateway/types";
 
 type BuildEnv = "prod" | "staging" | "dev";
 
@@ -130,6 +132,19 @@ function createMainWindow(): BrowserWindow {
     win.show();
   });
 
+  // On Windows + Linux WITH a live tray, intercept the close button to hide
+  // the window rather than quit the app. macOS uses its own conventional
+  // hide-on-close pattern via `window-all-closed`. If the tray failed to
+  // construct (Linux without StatusNotifierItem), the default quit-on-close
+  // applies — otherwise the user couldn't kill the app.
+  win.on("close", (event) => {
+    if (process.platform === "darwin") return;
+    if (isQuitting) return;
+    if (!tray) return; // No tray → default quit-on-close stays
+    event.preventDefault();
+    win.hide();
+  });
+
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (isAllowedExternalOrigin(url)) {
       void shell.openExternal(url);
@@ -239,6 +254,13 @@ function buildAppMenu(): void {
 // safeStorage and app.getPath("userData") are usable. Kept module-level so
 // before-quit can reference it.
 let gateway: GatewayController | null = null;
+// Tray reference must outlive its constructor — V8 will GC it otherwise and
+// the icon disappears from the system tray. Also `null` on platforms that
+// reject tray construction (some headless Linux), in which case
+// window-close-hides behavior is skipped (otherwise the app would be
+// unkillable through the X button).
+let tray: Tray | null = null;
+let isQuitting = false;
 
 function getMainWindow(): BrowserWindow | null {
   return BrowserWindow.getAllWindows()[0] ?? null;
@@ -250,8 +272,15 @@ void app.whenReady().then(() => {
   gateway = new GatewayController(
     {
       onLog: (line) => getMainWindow()?.webContents.send("gateway:log", line),
-      onStateChange: (s) =>
-        getMainWindow()?.webContents.send("gateway:state", s),
+      onStateChange: (s: GatewayStatus) => {
+        getMainWindow()?.webContents.send("gateway:state", s);
+        // Refresh tray menu on every gateway state transition so Start/Stop
+        // enabled-state and the "Gateway: <state>" label stay current.
+        const refreshHook = (
+          tray as (Tray & { __refreshFromStatus?: (s: GatewayStatus) => void }) | null
+        )?.__refreshFromStatus;
+        refreshHook?.(s);
+      },
     },
     new SafeStorageBinaryPathStore(app.getPath("userData")),
   );
@@ -283,6 +312,19 @@ void app.whenReady().then(() => {
   buildAppMenu();
   createMainWindow();
 
+  // Create tray AFTER first window so getMainWindow() in tray click handlers
+  // resolves to a real window. Returns null when tray construction fails
+  // (e.g. Linux without StatusNotifierItem support) — close-window-hides
+  // behavior below checks for null and falls back to default quit.
+  tray = createTray({
+    gateway: gateway!,
+    mainWindow: () => getMainWindow(),
+    quit: () => {
+      isQuitting = true;
+      app.quit();
+    },
+  });
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow();
@@ -291,6 +333,16 @@ void app.whenReady().then(() => {
 });
 
 app.on("before-quit", async (event) => {
+  isQuitting = true;
+  // Tear down tray first so its handlers don't fire mid-quit.
+  if (tray) {
+    try {
+      tray.destroy();
+    } catch {
+      // best effort — platform-handle release; ignore failures during quit
+    }
+    tray = null;
+  }
   if (!gateway) return;
   const status = gateway.getStatus();
   if (status.state === "running" || status.state === "starting") {
