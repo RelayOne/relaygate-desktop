@@ -32,15 +32,28 @@ The annotated tree below shows the files that matter and why. Anything not liste
 relaygate-desktop/
 ├── src/
 │   ├── main.ts                  # Electron main process: window lifecycle, URL guard,
-│   │                            # navigation filter, native menu, app event handlers
-│   └── preload.ts               # contextBridge exposing window.relaygate.{version,
-│                                # platform, arch} read-only to the renderer
+│   │                            # navigation filter, native menu, gateway IPC handlers,
+│   │                            # notification permission allowlist
+│   ├── preload.ts               # contextBridge exposing window.relaygate.{version,
+│   │                            # commit, env, platform, arch, gateway.*} read-only
+│   └── gateway/
+│       ├── types.ts             # Public type contract (no electron imports)
+│       ├── controller.ts        # GatewayController class — child_process.spawn of the
+│       │                        # relaygate Go binary, log ring, state machine
+│       └── storage.ts           # BinaryPathStore interface; SafeStorage-backed +
+│                                # in-memory implementations
 ├── tests/
 │   ├── smoke.test.ts            # Minimal CDP-attached render check; builds, launches
 │   │                            # Electron with --remote-debugging-port, asserts non-
 │   │                            # empty DOM, screenshots to tests/artifacts/
-│   └── live-dashboard.test.ts   # Broader regression suite against app.relaygate.ai
-│                                # (signin, dashboard, mobile viewport, SEO meta)
+│   ├── live-dashboard.test.ts   # Broader regression suite against app.relaygate.ai
+│   │                            # (signin, dashboard, mobile viewport, SEO meta)
+│   ├── gateway.test.ts          # GatewayController unit-style integration test
+│   │                            # (no Electron — runs under tsx)
+│   ├── notifications.test.ts    # setPermissionRequestHandler allowlist probe
+│   └── fixtures/
+│       ├── mock-relaygate.js    # Mock relaygate binary for gateway.test.ts
+│       └── bad-version-binary.js # Mock for binary-version-rejection path
 ├── assets/
 │   └── icon.png                 # 1024x1024 source; electron-builder derives platform
 │                                # icons (.ico for Windows, .icns for macOS)
@@ -75,6 +88,12 @@ The desktop app is small enough that "system components" means a handful of coop
 **electron-builder** consumes the compiled `dist/` directory plus `package.json` and produces platform-native installers. It reads `electron-builder.yml` for the shared cross-platform configuration (Linux AppImage+deb, Windows nsis, macOS zip — all cross-compilable from Linux) and reads the extending `electron-builder.mac.yml` only when packaging DMG on a real macOS host. Output lands in `release/`.
 
 **Cloud Build** is the orchestrator. The Linux pipeline (`cloudbuild.yaml`) runs `npm ci`, `npm run typecheck`, `npm run build`, electron-builder cross-compile across all platforms, a libdmg-hfsplus DMG userspace step, and a final GCS publish step. The future macOS pipeline (`cloudbuild-mac.yaml`) is wired but inert until a macOS host is provisioned for SSH-tunneled signed builds.
+
+**Gateway controller** (`src/gateway/`) owns the lifecycle of a *locally-running* `relaygate` Go binary spawned as a subprocess of the Electron main process. The desktop wrapper does not bundle the gateway binary — users who want local-mode point the wrapper at an existing install (Homebrew, `go install`, downloaded release tarball). The controller offers six IPC handlers exposed via the `window.relaygate.gateway` namespace from the preload bridge: `start(configPath?)`, `stop()`, `status()`, `setBinaryPath(absPath)`, `getBinaryPath()`, and `pickBinary()` (the last spawns a native open-file dialog). Two event subscriptions, `onLog(handler)` and `onStateChange(handler)`, stream subprocess stderr (slog-formatted JSON, parsed into `{timestamp, level, msg, fields, raw}` objects) and lifecycle transitions (`stopped → starting → running → stopping → stopped`, with `errored` for unexpected exits) into the renderer. The dashboard renders whatever UI it wants on top of those primitives — the wrapper supplies the bridge, not the UI.
+
+The controller's security model is intentionally cautious. The binary path is **never** auto-discovered from `$PATH`; the user explicitly picks the file via the native dialog the first time, and the path is persisted via Electron's `safeStorage` (encrypted on macOS/Windows via OS keychain, plaintext fallback on some Linux configurations per the documented Electron behavior). Subsequent starts re-validate the path: file must exist, must be a regular file, and `<binary> --version` must print `relaygate v<semver>` within five seconds. Subprocess spawning uses `shell: false` always, with a curated `PATH` (`/usr/local/bin`, `/opt/homebrew/bin`, system bins, plus Windows-equivalent paths) rather than the desktop's full env — argv injection and supply-chain inheritance are the two hostile shapes we explicitly close. Logs are line-buffered into a 5,000-line ring; on overflow a single `[truncated]` marker is emitted and older lines silently dropped, preventing OOM if the gateway logs verbosely. The renderer cannot redirect to a different binary by passing a path to `gateway.start` — the IPC handler ignores any path argument and uses only the safeStorage-persisted value, so even a compromised dashboard can only restart the user-approved binary, never escalate to a different one. Crashes do not auto-restart: the controller transitions to `errored` and surfaces `lastError`, requiring an explicit user click to start again.
+
+The three files in `src/gateway/` correspond to the three concerns. `types.ts` declares the public contract (`GatewayState`, `GatewayStatus`, `LogLine`, `BinaryValidation`, `GatewayControllerOpts`) and intentionally imports nothing from `electron` so the types are reusable from a plain Node test harness. `controller.ts` defines `GatewayController`, which receives a `BinaryPathStore` interface as a constructor argument — this lets `tests/gateway.test.ts` swap in `InMemoryBinaryPathStore` and exercise the full state machine without an Electron runtime. `storage.ts` provides the production `SafeStorageBinaryPathStore` (writes a single `gateway-binary-path.enc` file under `app.getPath('userData')`) and the test-only `InMemoryBinaryPathStore`. The split keeps `controller.ts` Electron-free, which is why the integration test runs under `tsx` in <500ms with no display server.
 
 ## 5. Data Models
 
