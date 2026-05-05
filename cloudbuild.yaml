@@ -102,6 +102,7 @@ steps:
         # requires hdiutil (macOS-only).
         npx electron-builder --linux --win --mac --x64 --arm64 \
           --config.extraMetadata.commit=$COMMIT_SHA \
+          --config.extraMetadata.env=${_ENV} \
           --publish never
         ls -la release/
 

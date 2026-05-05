@@ -11,6 +11,30 @@ const APP_ENTRY = path.resolve(__dirname, "..");
 const STARTUP_TIMEOUT_MS = 60_000;
 const PAGE_READY_TIMEOUT_MS = 45_000;
 
+// Mirror src/main.ts's env detection. Reads bundled package.json to get the
+// embedded build env. Defaults to 'prod' on any error so locally-run smokes
+// against an unbuilt source tree still target the prod dashboard.
+type SmokeEnv = "prod" | "staging" | "dev";
+const DASHBOARD_URL_BY_ENV: Record<SmokeEnv, string> = {
+  prod: "https://app.relaygate.ai",
+  staging: "https://app.staging.relaygate.ai",
+  dev: "https://app.dev.relaygate.ai",
+};
+function readSmokeEnv(): SmokeEnv {
+  try {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(APP_ENTRY, "package.json"), "utf8"),
+    ) as { env?: string };
+    if (pkg.env === "dev" || pkg.env === "staging") return pkg.env;
+    return "prod";
+  } catch {
+    return "prod";
+  }
+}
+const SMOKE_BUILD_ENV: SmokeEnv = readSmokeEnv();
+const EXPECTED_DASHBOARD_URL = DASHBOARD_URL_BY_ENV[SMOKE_BUILD_ENV];
+const EXPECTED_DASHBOARD_ORIGIN = new URL(EXPECTED_DASHBOARD_URL).origin;
+
 function waitForPort(port: number, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve, reject) => {
@@ -91,7 +115,7 @@ async function main(): Promise<void> {
         if (resp.request().resourceType() !== "document") return;
         const u = resp.url();
         if (
-          !u.startsWith("https://app.relaygate.ai") &&
+          !u.startsWith(EXPECTED_DASHBOARD_ORIGIN) &&
           !u.startsWith("http://localhost")
         ) {
           return;
@@ -113,7 +137,7 @@ async function main(): Promise<void> {
         if (resp.request().resourceType() !== "document") return;
         const u = resp.url();
         if (
-          !u.startsWith("https://app.relaygate.ai") &&
+          !u.startsWith(EXPECTED_DASHBOARD_ORIGIN) &&
           !u.startsWith("http://localhost")
         ) {
           return;
@@ -126,7 +150,7 @@ async function main(): Promise<void> {
     const dashboardTarget = await browser.waitForTarget(
       (t) =>
         t.type() === "page" &&
-        (t.url().startsWith("https://app.relaygate.ai") ||
+        (t.url().startsWith(EXPECTED_DASHBOARD_ORIGIN) ||
           t.url().startsWith("http://localhost")),
       { timeout: PAGE_READY_TIMEOUT_MS },
     );
@@ -159,7 +183,7 @@ async function main(): Promise<void> {
       .catch(() => "<evaluate-failed>");
     const finalUrl = page.url();
 
-    const expectedOrigin = "https://app.relaygate.ai";
+    const expectedOrigin = EXPECTED_DASHBOARD_ORIGIN;
     const allowedFinalOrigin = (() => {
       try {
         return new URL(finalUrl).origin === expectedOrigin;
