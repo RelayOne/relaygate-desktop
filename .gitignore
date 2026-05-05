@@ -16,4 +16,11 @@ tests/artifacts/
 .work/proof/binaries/*.deb
 .work/proof/binaries/*.zip
 .work/proof/binaries/*.exe
+.work/proof/binaries/*.dmg
 !.work/proof/binaries/SHA256SUMS.txt
+.claude/
+.claude-config/
+.codex/
+runclaude
+runloop
+setup.sh
