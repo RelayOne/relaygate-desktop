@@ -103,6 +103,31 @@ Note: the user's saved deployment conventions memo doesn't explicitly call out C
 
 **F-D** (explicit publicAccessPrevention): STATUS: FIXED-AS-INHERITED — bucket `publicAccessPrevention` is now explicitly `inherited` (which is the documented intended state per the audit). Note: a fat-finger attempt with `--public-access-prevention` (no value) initially enabled enforcement, breaking public reads (HTTP 403) for ~30 seconds; reverted immediately with `--no-public-access-prevention` and verified HTTP 200 restored. No artifact corruption; no cached blob references broken. Caveat captured in this audit so future hands know the flag's default value flips the wrong way.
 
-## Side note: 32 other triggers share the same problem
+## Cross-project sweep: all 32 other triggers ALSO scoped down
 
-`claude-eric-agent` SA is bound to 33 Cloud Build triggers across the org. This repo fixed its one. The other 32 triggers (actium-*, wellytic-*, veritize-*, deeptap-*, coderadar-*, etc.) carry the same `roles/owner` blast radius and should be addressed in their respective projects' scope-and-repair runs. This is documented here for cross-project visibility but is explicitly NOT this repo's responsibility to fix.
+After completing relaygate-desktop's scope-down, the user authorized
+extending the same pattern to all 32 other triggers org-wide. Status:
+**0 triggers remain on `claude-eric-agent`** as of 2026-05-04 evening.
+
+### Inventory (33 total triggers, including this repo's 2)
+
+| Pattern | Roles per SA | Triggers |
+|---|---|---|
+| **A** — storage publishers | builder + logWriter + storage.objectAdmin (relayone-488319-public) | r1-agent-stoke-binaries, deeptap-binaries, r1-agent-binaries, wellytic-mobile-android (4) |
+| **B** — Cloud Run deploy (no SQL) | A roles minus storage + secretmanager.secretAccessor + artifactregistry.writer + run.developer + iam.serviceAccountUser | deeptap-deploy, coderadar-deploy, veritize-deploy, relayone-deploy, wellytic-deploy, actium-studio-deploy, heroa-deploy, coderadar-ingest-deploy, truecom-admin-deploy, wellytic-portal-deploy, truecom-app-deploy, relayonethinger (12) |
+| **C** — Cloud Run + Cloud SQL | B roles + cloudsql.client | actium-staging-deploy, actium-dev-deploy, wellytic-admin-deploy, veritize-admin-deploy, relaygate-admin-deploy, coderadar-admin-deploy, cloudswarm-admin-deploy, wellytic-app-deploy, relaygate-app-deploy, parentproof-deploy, framebright-app-deploy, cloudswarm-app-deploy, veritize-app-deploy (13) |
+| **D-trustplane** — CI-only | builder + logWriter only | trustplane-deploy (1) |
+| **D-attestik** — B + compute | B roles + compute.instanceAdmin.v1 | attestik-deploy (1) |
+| **D-actium** — cross-project | B+SQL roles split: builder + logWriter in relayone-488319 (CB host); secretmanager + artifactregistry + run + actAs + cloudsql in actium-488319 (deploy target) | actium-deploy (1) |
+| **relaygate-desktop** | builder + logWriter + storage.objectAdmin (bucket) + actAs (CB agent) | relaygate-desktop-binaries, relaygate-desktop-pr (this repo, originally addressed) |
+
+Each trigger now has its OWN dedicated SA named `<trigger>-ci@relayone-488319.iam.gserviceaccount.com`. Per-SA role sets are minimum-needed (verified by inspecting each repo's cloudbuild.yaml). All SAs include `iam.serviceAccountTokenCreator` + `iam.serviceAccountUser` granted to the Cloud Build service agent (required for any future PR triggers; harmless for push-only triggers today).
+
+### What's NOT touched
+- `claude-eric-agent@relayone-488319.iam.gserviceaccount.com` SA itself remains with `roles/owner` — it's described as "long-lived, no session expiry" agent SA used for interactive infrastructure work outside CI. Removing its owner role is a separate decision (user-only, since some interactive operations may rely on owner-level access). With zero triggers now using it, that decision is purely about interactive use, not CI risk.
+
+### Reusable script
+`/tmp/cb-analysis/scope-down-trigger.sh` (one-off, retained for reference) takes a trigger name + pattern letter and applies the appropriate SA + roles + rebind. The patterns are derived from cloudbuild.yaml inspection. The script is idempotent (gcloud `add-iam-policy-binding` + `iam service-accounts create` are idempotent on re-run).
+
+### Verification snapshot (2026-05-04 evening)
+`gcloud builds triggers list --project=relayone-488319 --region=us-central1 --format=json | jq '[.[] | select((.serviceAccount // "") | contains("claude-eric-agent"))] | length'` returns `0`. Each trigger now binds to its dedicated SA. End-to-end pipeline verification for this repo's relaygate-desktop-binaries and relaygate-desktop-pr triggers covered above; the OTHER 31 triggers will be exercised on their next legitimate push and will surface any missing-role gaps in real time, recoverable per-trigger via the same gcloud `add-iam-policy-binding` calls.
