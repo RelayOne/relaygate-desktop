@@ -1,5 +1,13 @@
 timeout: 3600s
 
+substitutions:
+  # _ENV namespaces published artifacts by environment so dev/staging/prod
+  # builds don't share the GCS path. Default 'prod' so the existing
+  # relaygate-desktop-binaries (push to main) trigger keeps working
+  # unchanged. Dev/staging triggers override via --substitutions=_ENV=...
+  # See specs/cloudbuild-env-paths.md for the full path scheme.
+  _ENV: 'prod'
+
 options:
   machineType: E2_HIGHCPU_8
   logging: CLOUD_LOGGING_ONLY
