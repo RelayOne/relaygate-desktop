@@ -32,6 +32,7 @@ What the user actually sees and interacts with after launching the app. The shel
 | Live dashboard wrapper | One window app — no browser tab juggling, no losing the tab among 60 others, dedicated dock/taskbar entry for the RelayGate UI | Done | `src/main.ts` |
 | Cross-platform native menu | Standard OS menus (File / Edit / View / Help) with platform-correct mac App menu (about / services / hide / quit) | Done | `src/main.ts:142-204` |
 | Configurable backend URL | Devs can point the app at local dev or staging via `RELAYGATE_DESKTOP_URL` env var without rebuilding | Done | `src/main.ts:6-22` |
+| Env-aware default dashboard URL (per build env) | A binary built from the `dev` branch defaults to `app.dev.relaygate.ai`, `staging` to `app.staging.relaygate.ai`, `main` to `app.relaygate.ai` — testers running pre-prod builds connect to the matching pre-prod backend automatically, no env-var setup needed | Done | `src/main.ts:5-30` |
 | Build SHA exposed at runtime | Users can report exact build version when filing bugs — visible via `window.relaygate.version` from the preload bridge | Done | `src/preload.ts` |
 | Native gateway control panel | Manage a locally-running `relaygate` CLI gateway (start/stop, view logs, edit routing rules) without leaving the app | Horizon | — (per root README "Future releases may add...") |
 | OS notifications | Get notified of relay events, budget alerts, or provider outages without keeping the window focused | Horizon | — |
@@ -61,6 +62,10 @@ Everything that turns a `git push` into installable binaries on GCS. Today, ever
 | GCS `latest/` mirror | Stable download URL that always points at the most recent `main` build — landing page links don't go stale | Done | `cloudbuild.yaml:publish` |
 | macOS host runner pipeline (signed/notarized DMG) | Future ability to ship signed builds via SSH-tunneled Mac mini / MacStadium / MacinCloud — eliminates Gatekeeper warnings | Scoped | `cloudbuild-mac.yaml` (skeleton in place, waits on Apple Developer secrets + a host) |
 | Embedded build SHA | Bug reports include the exact commit users are running; reproducing an issue is `git checkout <sha>` away | Done | `cloudbuild.yaml` (`--config.extraMetadata.commit`) |
+| Embedded build env (prod/staging/dev) | Each binary knows which environment it was built for; runtime defaults the dashboard URL to the matching environment so testers don't need env-var setup | Scoped | `specs/desktop-env-aware-default-url.md` |
+| Per-environment artifact paths in GCS | Dev/staging/prod binaries published to separate path prefixes (`dev/latest/`, `staging/latest/`, `prod/latest/`) so pre-prod builds don't clobber prod download links | Scoped | `specs/cloudbuild-env-paths.md` |
+| CI triggers for `dev` and `staging` branches | Pushes and PRs targeting `dev` or `staging` produce env-tagged artifacts and run the same smoke gate as `main` — feature → dev → staging → main promotion is gated end-to-end | Scoped | `specs/cloudbuild-triggers-dev-staging.md` |
+| Dashboard env routing (`app.dev` / `app.staging` hostnames) | The pre-prod hostnames the env-aware desktop binaries connect to are wired in Cloud Run + Cloudflare so dev/staging builds reach matching dev/staging dashboards instead of 404 | Scoped | `specs/dashboard-dev-staging-routing.md` |
 
 ## Testing
 
@@ -89,4 +94,4 @@ Project docs are intentionally maintained as code — every phase transition rew
 | Mac build deep-dive | Engineers wiring up a Mac host runner have a single reference for signing, notarization, and the SSH-tunneled pipeline | Done | `docs/MAC_BUILD.md` |
 
 ---
-*Last updated: 2026-05-04*
+*Last updated: 2026-05-05*
