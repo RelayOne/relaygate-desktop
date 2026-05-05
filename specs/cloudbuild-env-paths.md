@@ -1,7 +1,8 @@
-<!-- STATUS: in-progress -->
+<!-- STATUS: done -->
 <!-- TYPE: feature -->
 <!-- CREATED: 2026-05-05 -->
 <!-- BUILD_STARTED: 2026-05-05 -->
+<!-- BUILD_COMPLETED: 2026-05-05 -->
 <!-- DEPENDS_ON: none -->
 <!-- BUILD_ORDER: 2 -->
 
