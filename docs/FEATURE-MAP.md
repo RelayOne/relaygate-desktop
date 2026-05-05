@@ -34,9 +34,9 @@ What the user actually sees and interacts with after launching the app. The shel
 | Configurable backend URL | Devs can point the app at local dev or staging via `RELAYGATE_DESKTOP_URL` env var without rebuilding | Done | `src/main.ts:6-22` |
 | Env-aware default dashboard URL (per build env) | A binary built from the `dev` branch defaults to `app.dev.relaygate.ai`, `staging` to `app.staging.relaygate.ai`, `main` to `app.relaygate.ai` — testers running pre-prod builds connect to the matching pre-prod backend automatically, no env-var setup needed | Done | `src/main.ts:5-30` |
 | Build SHA exposed at runtime | Users can report exact build version when filing bugs — visible via `window.relaygate.version` from the preload bridge | Done | `src/preload.ts` |
-| Native gateway control panel | Manage a locally-running `relaygate` CLI gateway (start/stop, view logs, edit routing rules) without leaving the app | Horizon | — (per root README "Future releases may add...") |
-| OS notifications | Get notified of relay events, budget alerts, or provider outages without keeping the window focused | Horizon | — |
-| System tray icon | Quick access to start/stop the local gateway from the menu bar / system tray | Horizon | — |
+| Native gateway control panel | Manage a locally-running `relaygate` CLI gateway (start/stop, view logs, edit routing rules) without leaving the app | Scoped | `specs/native-gateway-control-panel.md` |
+| OS notifications | Get notified of relay events, budget alerts, or provider outages without keeping the window focused | Scoped | `specs/os-notifications.md` |
+| System tray icon | Quick access to start/stop the local gateway from the menu bar / system tray | Scoped | `specs/system-tray-icon.md` |
 
 ## Security
 
@@ -76,7 +76,7 @@ Two test suites, both end-to-end via Puppeteer attaching to Electron over the Ch
 | Puppeteer-CDP smoke test | Catch regressions where the dashboard fails to render in our exact Electron + Chromium build (catches Electron upgrade breakage) | Done | `tests/smoke.test.ts` |
 | Live-dashboard regression suite | Catches if `app.relaygate.ai` ships a change that breaks the desktop wrapper (signin, dashboard render, mobile viewport, SEO meta) | Done | `tests/live-dashboard.test.ts` |
 | CI-integrated test run | Smoke tests gate every Cloud Build — broken builds never publish to GCS | Done | `cloudbuild.yaml:smoke-test` (xvfb-run + 3-attempt retry; runs between `build-main` and `dist-all-platforms`) |
-| Cross-platform smoke (one per OS) | Catch regressions specific to one platform's Electron+Chromium combination (currently only Linux is auto-tested) | Horizon | — |
+| Cross-platform smoke (one per OS) | Catch regressions specific to one platform's Electron+Chromium combination (currently only Linux is auto-tested) | Scoped | `specs/cross-platform-smoke.md` |
 
 ## Documentation
 
