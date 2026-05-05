@@ -62,10 +62,10 @@ Everything that turns a `git push` into installable binaries on GCS. Today, ever
 | GCS `latest/` mirror | Stable download URL that always points at the most recent `main` build — landing page links don't go stale | Done | `cloudbuild.yaml:publish` |
 | macOS host runner pipeline (signed/notarized DMG) | Future ability to ship signed builds via SSH-tunneled Mac mini / MacStadium / MacinCloud — eliminates Gatekeeper warnings | Scoped | `cloudbuild-mac.yaml` (skeleton in place, waits on Apple Developer secrets + a host) |
 | Embedded build SHA | Bug reports include the exact commit users are running; reproducing an issue is `git checkout <sha>` away | Done | `cloudbuild.yaml` (`--config.extraMetadata.commit`) |
-| Embedded build env (prod/staging/dev) | Each binary knows which environment it was built for; runtime defaults the dashboard URL to the matching environment so testers don't need env-var setup | Scoped | `specs/desktop-env-aware-default-url.md` |
-| Per-environment artifact paths in GCS | Dev/staging/prod binaries published to separate path prefixes (`dev/latest/`, `staging/latest/`, `prod/latest/`) so pre-prod builds don't clobber prod download links | Scoped | `specs/cloudbuild-env-paths.md` |
-| CI triggers for `dev` and `staging` branches | Pushes and PRs targeting `dev` or `staging` produce env-tagged artifacts and run the same smoke gate as `main` — feature → dev → staging → main promotion is gated end-to-end | Scoped | `specs/cloudbuild-triggers-dev-staging.md` |
-| Dashboard env routing (`app.dev` / `app.staging` hostnames) | The pre-prod hostnames the env-aware desktop binaries connect to are wired in Cloud Run + Cloudflare so dev/staging builds reach matching dev/staging dashboards instead of 404 | Scoped | `specs/dashboard-dev-staging-routing.md` |
+| Embedded build env (prod/staging/dev) | Each binary knows which environment it was built for; runtime defaults the dashboard URL to the matching environment so testers don't need env-var setup | Done | `cloudbuild.yaml` (`--config.extraMetadata.env`) + `src/main.ts:5-30` |
+| Per-environment artifact paths in GCS | Dev/staging/prod binaries published to separate path prefixes (`dev/latest/`, `staging/latest/`, `prod/latest/`) so pre-prod builds don't clobber prod download links | Done | `cloudbuild.yaml` (substitutions + publish step) |
+| CI triggers for `dev` and `staging` branches | Pushes and PRs targeting `dev` or `staging` produce env-tagged artifacts and run the same smoke gate as `main` — feature → dev → staging → main promotion is gated end-to-end | Done | 4 triggers under `relaygate-desktop-ci@` SA |
+| Dashboard env routing (`app.dev` / `app.staging` hostnames) | The pre-prod hostnames the env-aware desktop binaries connect to are wired in Cloud Run + Cloudflare so dev/staging builds reach matching dev/staging dashboards instead of 404 | Done | Cloud Run domain mappings + Cloudflare CNAMEs |
 
 ## Testing
 
