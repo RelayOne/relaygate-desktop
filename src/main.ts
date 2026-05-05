@@ -1,7 +1,33 @@
 import { app, BrowserWindow, Menu, shell } from "electron";
+import * as fs from "node:fs";
 import * as path from "node:path";
 
-const DEFAULT_DASHBOARD_URL = "https://app.relaygate.ai";
+type BuildEnv = "prod" | "staging" | "dev";
+
+const DEFAULT_DASHBOARD_URL_BY_ENV: Record<BuildEnv, string> = {
+  prod: "https://app.relaygate.ai",
+  staging: "https://app.staging.relaygate.ai",
+  dev: "https://app.dev.relaygate.ai",
+};
+
+// Read the build env that electron-builder embedded via
+// --config.extraMetadata.env (see cloudbuild.yaml dist-all-platforms step).
+// `__dirname` resolves to `<bundle>/dist/`; package.json sits one level up
+// in both dev and packaged-asar layouts. Default to "prod" on any error so
+// older binaries built before this field existed still work.
+function readBuildEnv(): BuildEnv {
+  try {
+    const pkgPath = path.join(__dirname, "..", "package.json");
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as { env?: string };
+    if (pkg.env === "dev" || pkg.env === "staging") return pkg.env;
+    return "prod";
+  } catch {
+    return "prod";
+  }
+}
+
+const BUILD_ENV: BuildEnv = readBuildEnv();
+const DEFAULT_DASHBOARD_URL = DEFAULT_DASHBOARD_URL_BY_ENV[BUILD_ENV];
 
 function resolveDashboardUrl(): { href: string; origin: string } {
   const raw = process.env.RELAYGATE_DESKTOP_URL ?? DEFAULT_DASHBOARD_URL;
