@@ -95,6 +95,22 @@ To upload a locally produced artifact to the public bucket (e.g., to test the pu
 
 When all five are in place, every push to `main` triggers BOTH pipelines in parallel: the Linux pipeline produces the unsigned cross-compile set as today, and the mac pipeline SSHes to the macOS host, clones the repo at `$COMMIT_SHA`, runs `npm ci && npm run typecheck && npm run build && npm run dist:mac` (which uses `electron-builder.mac.yml` with `hardenedRuntime: true` and picks up `CSC_LINK`/`CSC_KEY_PASSWORD` from the host's environment), then `scp`s the signed `.dmg` files back to the Cloud Build workspace and publishes them to GCS — overwriting the unsigned DMGs from the Linux pipeline. Until the mac host exists, the trigger no-ops with `_MAC_RUNNER_HOST` empty (the pipeline checks for empty and exits 0 with a "skipping" message).
 
+## Dashboard environments
+
+The desktop wrapper loads its UI from a separately-deployed Next.js dashboard (`relaygate-app` repo, deployed as a Cloud Run service in this same project). Three dashboard environments serve three distinct desktop build channels:
+
+| Hostname | Cloud Run service | Used by | TLS |
+|---|---|---|---|
+| `app.relaygate.ai` | `relaygate-app` (revision `00026-bl2` at last update) | Production desktop builds (`main` branch) | Google managed cert via Cloud Run domain mapping |
+| `app.staging.relaygate.ai` | `relaygate-app-staging` | Staging desktop builds (`staging` branch) | Google managed cert via Cloud Run domain mapping |
+| `app.dev.relaygate.ai` | `relaygate-app-dev` | Development desktop builds (`dev` branch) | Google managed cert via Cloud Run domain mapping |
+
+All three hosts route to Cloud Run via the same pattern: a Cloudflare CNAME record for the subdomain (`app`, `app.staging`, `app.dev`) pointing at `ghs.googlehosted.com`, with Cloudflare proxying disabled (`proxied: false`) so the SNI handshake reaches Google directly and the Cloud Run-managed cert can serve the right certificate. Cloudflare proxying is intentionally off because Google's managed-cert provisioning relies on validating the request actually hits Google's frontend — proxying through Cloudflare would terminate TLS at Cloudflare, which would force us to manage origin certs ourselves and lose the auto-renewal property.
+
+The Cloud Run domain mapping for each hostname is bound to its respective service via `gcloud beta run domain-mappings create --service=<svc> --domain=<host>`. Once the CNAME resolves, Google's frontend auto-provisions a managed certificate from `pki.goog`; provisioning typically takes 1-5 minutes after the DNS record propagates. Both pre-prod hostnames return HTTP 307 (NextAuth signin redirect) at the dashboard's root path, matching prod's behavior — that's the smoke-validation that the routing is wired correctly.
+
+Desktop binaries built from the `dev` branch default to `app.dev.relaygate.ai`; staging binaries default to `app.staging.relaygate.ai`; main binaries default to `app.relaygate.ai`. The `RELAYGATE_DESKTOP_URL` env var still overrides the default at runtime regardless of build env, so a developer can point a prod-built binary at localhost or staging without rebuilding.
+
 ## Infrastructure
 
 - **GCS bucket**: `gs://relayone-488319-public/relaygate-desktop/` with public-read on `latest/*` and `{sha}/*` paths. No CDN in front — direct GCS download. GCS multi-regional / dual-regional class is fine for the scale here; single-region is also fine. No object lifecycle rules in place today; old `{sha}/` prefixes accumulate indefinitely. (Adding a 90-day lifecycle rule is a sensible Horizon item.)
@@ -137,4 +153,4 @@ To produce a fresh forward-rolled build (rather than reverting), revert the offe
 A common dry run before any rollback is to compare what `latest/` currently advertises against the desired known-good prefix: `diff <(gsutil ls gs://relayone-488319-public/relaygate-desktop/latest/) <(gsutil ls gs://relayone-488319-public/relaygate-desktop/$KNOWN_GOOD_SHA/)`. The two listings should differ only in path prefix; any extra or missing files between them is a flag to investigate before promoting.
 
 ---
-*Last updated: 2026-05-04*
+*Last updated: 2026-05-05*
