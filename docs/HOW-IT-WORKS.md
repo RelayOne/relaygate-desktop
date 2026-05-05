@@ -183,6 +183,31 @@ lets the dashboard render an "Connected to dev/staging/prod" badge or
 adjust client behavior based on which environment the desktop wrapper
 was built for.
 
+Before the first window opens, the main process also installs a
+permission-request handler on the default Electron `session` via
+`session.defaultSession.setPermissionRequestHandler(...)`. By default
+Chromium denies every renderer-initiated permission request silently
+(camera, microphone, geolocation, clipboard read, MIDI, etc.). This is
+correct posture for a wrapped third-party dashboard. The one permission
+the dashboard genuinely needs is `notifications` — for budget alerts,
+provider-outage warnings, and other event-driven signals that are useful
+even when the dashboard window is unfocused. Our handler allows
+`notifications` if and only if the requesting URL's origin matches the
+existing `EXTERNAL_ORIGIN_ALLOWLIST` (or one of the suffix-matched
+first-party domains under `.relaygate.ai` / `.relayone.ai`). Every other
+permission type is denied unconditionally; every non-allowlisted origin
+is denied for notifications too. On Windows the wrapper additionally
+calls `app.setAppUserModelId('ai.relaygate.desktop')` early in
+`whenReady` so that notification toasts attribute to "RelayGate"
+instead of the generic "Electron" label, and so that the desktop entry
+binds correctly when users pin it to the taskbar. From the dashboard
+JS side this is invisible: a call like
+`new Notification('Budget alert', { body: '...' })` Just Works on every
+platform with a notification daemon (Notification Center on macOS,
+Action Center on Windows, libnotify-aware Linux DEs); on headless Linux
+without a notification daemon the call silently constructs and fires
+its `onerror` handler, which is correct degradation.
+
 **Step 6, interactions.** The dashboard JavaScript inside the renderer
 makes XHR and `fetch` calls directly to `api.relaygate.ai` over HTTPS.
 Electron is invisible to that traffic; it does not proxy or inspect it.
