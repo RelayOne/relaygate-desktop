@@ -54,6 +54,8 @@ const EXTERNAL_ORIGIN_ALLOWLIST: ReadonlySet<string> = new Set([
   "https://relaygate.ai",
   "https://www.relaygate.ai",
   "https://app.relaygate.ai",
+  "https://app.staging.relaygate.ai",
+  "https://app.dev.relaygate.ai",
   "https://docs.relaygate.ai",
   "https://blog.relaygate.ai",
   "https://api.relaygate.ai",
