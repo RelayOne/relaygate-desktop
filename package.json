@@ -28,12 +28,12 @@
     "test:smoke": "npm run build && tsx tests/smoke.test.ts",
     "test:gateway": "tsx tests/gateway.test.ts"
   },
-  "dependencies": {},
   "devDependencies": {
     "@types/node": "^20.16.5",
     "electron": "^35.7.5",
     "electron-builder": "^25.1.8",
     "puppeteer-core": "^23.10.0",
+    "sharp": "^0.34.5",
     "tsx": "^4.21.0",
     "typescript": "^5.7.3"
   }
