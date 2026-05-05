@@ -1,4 +1,5 @@
-<!-- STATUS: ready -->
+<!-- STATUS: in-progress -->
+<!-- BUILD_STARTED: 2026-05-05 -->
 <!-- TYPE: feature -->
 <!-- CREATED: 2026-05-05 -->
 <!-- DEPENDS_ON: native-gateway-control-panel -->
