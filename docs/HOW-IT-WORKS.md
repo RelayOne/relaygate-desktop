@@ -206,6 +206,30 @@ Off-origin in-window navigation hits `will-navigate`
 `shell.openExternal` if it is on the allowlist, or logs it to stderr and
 drops it otherwise.
 
+A persistent tray icon ships in the system tray (menu bar on macOS,
+Action-Center notification area on Windows, the Linux notification area
+on desktop environments that support StatusNotifierItem). The icon
+provides a single-click path to show or hide the dashboard, plus a
+right-click (or click on macOS) context menu with state-aware Start
+Gateway / Stop Gateway items, an "Open Logs..." item that signals the
+dashboard via the `tray:open-logs` IPC channel to render its log viewer,
+and a "Configure Binary..." item that fires the same native open-file
+dialog used by `gateway.pickBinary()`. The status label at the top of
+the menu summarizes current state — "Gateway: running on :8090",
+"Gateway: stopped (v1.1.0)", "Gateway: errored — exited code=1", or
+"Gateway: not configured" if the user hasn't picked a binary yet — and
+re-renders on every gateway state transition because `main.ts`'s
+`onStateChange` callback invokes a `__refreshFromStatus` hook on the
+tray. On Windows and Linux the close button (the X in the window chrome)
+intercepts to hide the window rather than quit the app, leaving the
+tray and any running gateway alive in the background. macOS keeps its
+conventional `window-all-closed` hide-on-close pattern instead. If
+`Tray` construction throws on a Linux setup that lacks
+StatusNotifierItem (some headless GNOME configurations), `createTray`
+catches the error and returns `null`; in that case the close
+interceptor is skipped, restoring the default quit-on-close behavior so
+the app remains killable.
+
 The dashboard can also drive a *locally-running* `relaygate` Go gateway
 via the `window.relaygate.gateway` namespace exposed by the preload
 bridge. Calling `await window.relaygate.gateway.pickBinary()` opens a
