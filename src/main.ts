@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, session, shell } from "electron";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -107,6 +107,14 @@ function safeUrlForLog(rawUrl: string): string {
     return `${u.origin}${u.pathname}`;
   } catch {
     return "<unparseable-url>";
+  }
+}
+
+function safeOriginOf(rawUrl: string): string | null {
+  try {
+    return new URL(rawUrl).origin;
+  } catch {
+    return null;
   }
 }
 
@@ -267,6 +275,37 @@ function getMainWindow(): BrowserWindow | null {
 }
 
 void app.whenReady().then(() => {
+  // Windows: associate native notifications + taskbar pinning with the
+  // installed AppUserModelID (matches `appId` in electron-builder.yml). Without
+  // this, Windows attributes notification toasts to "Electron" rather than
+  // "RelayGate". No-op on macOS and Linux per Electron docs.
+  app.setAppUserModelId("ai.relaygate.desktop");
+
+  // Permission request handler: deny ALL renderer-initiated permissions by
+  // default; only allow `notifications` for origins in our existing
+  // EXTERNAL_ORIGIN_ALLOWLIST / ALLOWED_HOST_SUFFIXES. Must be installed
+  // BEFORE the first BrowserWindow is created so the handler is in place
+  // when the dashboard JS first calls Notification.requestPermission().
+  session.defaultSession.setPermissionRequestHandler(
+    (_webContents, permission, callback, details) => {
+      if (permission !== "notifications") {
+        callback(false);
+        return;
+      }
+      const requestingOrigin = details.requestingUrl
+        ? safeOriginOf(details.requestingUrl)
+        : null;
+      if (requestingOrigin && isAllowedExternalOrigin(requestingOrigin)) {
+        callback(true);
+        return;
+      }
+      process.stderr.write(
+        `[main] notification permission denied for ${requestingOrigin ?? "<unknown>"}\n`,
+      );
+      callback(false);
+    },
+  );
+
   // Instantiate gateway controller before the first window so the dashboard's
   // first calls into window.relaygate.gateway.* find live IPC handlers.
   gateway = new GatewayController(
