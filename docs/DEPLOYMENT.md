@@ -42,6 +42,69 @@ Cloud Build substitutions used by the two pipelines, sourced either from Cloud B
 | `$PROJECT_ID` | Cloud Build builtin | Used by the macOS pipeline to fetch the `relaygate-desktop-mac-deploy-key` SSH key from Secret Manager via `gcloud secrets versions access latest --project=$PROJECT_ID`. |
 | `$_MAC_RUNNER_HOST` | `--substitutions` flag (mac pipeline only) | Hostname or IP address of the macOS host that the SSH-tunneled build connects to. Empty by default; when empty, the pipeline short-circuits with a "skipping" message. |
 | `$_MAC_RUNNER_USER` | `--substitutions` flag (mac pipeline only); default `cloudbuild` | SSH username on the macOS host. The runner user must own a Node 20.x toolchain, Xcode Command Line Tools, and write access to `/tmp/relaygate-desktop-build`. |
+| `_ENV` | `--substitutions` flag, set per trigger | Publish-channel namespace. `prod` (default) writes to `gs://...relaygate-desktop/prod/{sha,latest}/` AND mirrors to legacy `relaygate-desktop/latest/`. `staging` / `dev` write to `gs://...relaygate-desktop/{staging,dev}/{sha,latest}/` only. |
+
+## Environments (slice-9, 2026-05-05)
+
+Per the portfolio env-split spec (`specs/portfolio-env-split.md` § Task group A), the env split for `relaygate-desktop` lives in the **publish channel** rather than a Cloud Run service (this repo is REPO-ARCHITECTURE-EXEMPT for Cloud Run / Cloud SQL / Secret Manager / DNS — there is no runtime service to split).
+
+| Env | Branch | GCS path | Trigger name | Notes |
+|-----|--------|----------|--------------|-------|
+| prod | `main` | `gs://relayone-488319-public/relaygate-desktop/prod/{sha,latest}/` + legacy mirror at `relaygate-desktop/latest/` | `relaygate-desktop-binaries` (existing) | Public "Stable" channel; consumed by `relaygate.ai` downloads page |
+| staging | `staging` | `gs://relayone-488319-public/relaygate-desktop/staging/{sha,latest}/` | `relaygate-desktop-staging` (new — see USER-ACTION below) | Pre-release validation channel; 90-day GCS lifecycle |
+| dev | `dev` | `gs://relayone-488319-public/relaygate-desktop/dev/{sha,latest}/` | `relaygate-desktop-dev` (new — see USER-ACTION below) | Per-commit dev iteration; 30-day GCS lifecycle |
+
+The cloudbuild.yaml's existing `_ENV` substitution (default `prod`) and the path scheme `${_ENV}/{SHORT_SHA,latest}/` were wired in commit `b71d6c2` and are unchanged by slice-9. Slice-9 only adds the trigger configs and the GCS lifecycle rules.
+
+### USER-ACTION-REQUIRED — gcloud trigger creates
+
+Run these commands once after merge. Requires Cloud Build GitHub-App reauthorization on first execution per project.
+
+```bash
+gcloud builds triggers create github \
+  --project=relayone-488319 \
+  --name=relaygate-desktop-staging \
+  --repo-owner=RelayOne \
+  --repo-name=relaygate-desktop \
+  --branch-pattern='^staging$' \
+  --build-config=cloudbuild.yaml \
+  --substitutions=_ENV=staging
+
+gcloud builds triggers create github \
+  --project=relayone-488319 \
+  --name=relaygate-desktop-dev \
+  --repo-owner=RelayOne \
+  --repo-name=relaygate-desktop \
+  --branch-pattern='^dev$' \
+  --build-config=cloudbuild.yaml \
+  --substitutions=_ENV=dev
+```
+
+### USER-ACTION-REQUIRED — apply GCS lifecycle rules
+
+```bash
+gcloud storage buckets update gs://relayone-488319-public \
+  --lifecycle-file=docs/relaygate-desktop-bucket-lifecycle.json \
+  --project=relayone-488319
+```
+
+This deletes objects under `relaygate-desktop/dev/` after 30 days and `relaygate-desktop/staging/` after 90 days. The `prod/` and legacy `latest/` prefixes are not affected.
+
+### USER-ACTION-REQUIRED — branch creation
+
+`origin/dev` and `origin/staging` already exist on this repo (verified 2026-05-05). No branch creation needed. Slice 1 (branch protection) covers ruleset application after this PR merges.
+
+### Smoke verification
+
+```bash
+# After staging/dev triggers fire on the next push to those branches:
+gcloud storage ls gs://relayone-488319-public/relaygate-desktop/staging/latest/ --project=relayone-488319 | head -20
+gcloud storage ls gs://relayone-488319-public/relaygate-desktop/dev/latest/ --project=relayone-488319 | head -20
+# Expect at least 7 artifacts each (linux x4, mac.zip x2, mac.dmg x2, win), matching the count guard at cloudbuild.yaml:215.
+
+# Confirm prod /latest/ legacy mirror is unchanged:
+gcloud storage ls gs://relayone-488319-public/relaygate-desktop/latest/ --project=relayone-488319 | wc -l
+```
 
 No application-side environment variables are baked into the build. `RELAYGATE_DESKTOP_URL` (which lets a developer point the desktop app at a non-production dashboard URL such as `http://localhost:3000` or a staging origin) is read at runtime by `src/main.ts` and is not part of the build pipeline. There is no `.env` file anywhere in the build path.
 
