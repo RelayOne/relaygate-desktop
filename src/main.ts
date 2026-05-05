@@ -1,6 +1,11 @@
-import { app, BrowserWindow, Menu, shell } from "electron";
+import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, session, shell } from "electron";
 import * as fs from "node:fs";
 import * as path from "node:path";
+
+import { GatewayController } from "./gateway/controller";
+import { SafeStorageBinaryPathStore } from "./gateway/storage";
+import { createTray } from "./tray";
+import type { GatewayStatus } from "./gateway/types";
 
 type BuildEnv = "prod" | "staging" | "dev";
 
@@ -105,6 +110,14 @@ function safeUrlForLog(rawUrl: string): string {
   }
 }
 
+function safeOriginOf(rawUrl: string): string | null {
+  try {
+    return new URL(rawUrl).origin;
+  } catch {
+    return null;
+  }
+}
+
 function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
@@ -125,6 +138,19 @@ function createMainWindow(): BrowserWindow {
 
   win.once("ready-to-show", () => {
     win.show();
+  });
+
+  // On Windows + Linux WITH a live tray, intercept the close button to hide
+  // the window rather than quit the app. macOS uses its own conventional
+  // hide-on-close pattern via `window-all-closed`. If the tray failed to
+  // construct (Linux without StatusNotifierItem), the default quit-on-close
+  // applies — otherwise the user couldn't kill the app.
+  win.on("close", (event) => {
+    if (process.platform === "darwin") return;
+    if (isQuitting) return;
+    if (!tray) return; // No tray → default quit-on-close stays
+    event.preventDefault();
+    win.hide();
   });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -232,15 +258,147 @@ function buildAppMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+// Lazy-init: GatewayController + IPC handlers depend on app.whenReady() so
+// safeStorage and app.getPath("userData") are usable. Kept module-level so
+// before-quit can reference it.
+let gateway: GatewayController | null = null;
+// Tray reference must outlive its constructor — V8 will GC it otherwise and
+// the icon disappears from the system tray. Also `null` on platforms that
+// reject tray construction (some headless Linux), in which case
+// window-close-hides behavior is skipped (otherwise the app would be
+// unkillable through the X button).
+let tray: Tray | null = null;
+let isQuitting = false;
+
+function getMainWindow(): BrowserWindow | null {
+  return BrowserWindow.getAllWindows()[0] ?? null;
+}
+
 void app.whenReady().then(() => {
+  // Windows: associate native notifications + taskbar pinning with the
+  // installed AppUserModelID (matches `appId` in electron-builder.yml). Without
+  // this, Windows attributes notification toasts to "Electron" rather than
+  // "RelayGate". No-op on macOS and Linux per Electron docs.
+  app.setAppUserModelId("ai.relaygate.desktop");
+
+  // Permission request handler: deny ALL renderer-initiated permissions by
+  // default; only allow `notifications` for origins in our existing
+  // EXTERNAL_ORIGIN_ALLOWLIST / ALLOWED_HOST_SUFFIXES. Must be installed
+  // BEFORE the first BrowserWindow is created so the handler is in place
+  // when the dashboard JS first calls Notification.requestPermission().
+  session.defaultSession.setPermissionRequestHandler(
+    (_webContents, permission, callback, details) => {
+      if (permission !== "notifications") {
+        callback(false);
+        return;
+      }
+      const requestingOrigin = details.requestingUrl
+        ? safeOriginOf(details.requestingUrl)
+        : null;
+      if (requestingOrigin && isAllowedExternalOrigin(requestingOrigin)) {
+        callback(true);
+        return;
+      }
+      process.stderr.write(
+        `[main] notification permission denied for ${requestingOrigin ?? "<unknown>"}\n`,
+      );
+      callback(false);
+    },
+  );
+
+  // Instantiate gateway controller before the first window so the dashboard's
+  // first calls into window.relaygate.gateway.* find live IPC handlers.
+  gateway = new GatewayController(
+    {
+      onLog: (line) => getMainWindow()?.webContents.send("gateway:log", line),
+      onStateChange: (s: GatewayStatus) => {
+        getMainWindow()?.webContents.send("gateway:state", s);
+        // Refresh tray menu on every gateway state transition so Start/Stop
+        // enabled-state and the "Gateway: <state>" label stay current.
+        const refreshHook = (
+          tray as (Tray & { __refreshFromStatus?: (s: GatewayStatus) => void }) | null
+        )?.__refreshFromStatus;
+        refreshHook?.(s);
+      },
+    },
+    new SafeStorageBinaryPathStore(app.getPath("userData")),
+  );
+
+  ipcMain.handle("gateway:start", (_e, configPath?: string) =>
+    gateway!.start(configPath),
+  );
+  ipcMain.handle("gateway:stop", () => gateway!.stop());
+  ipcMain.handle("gateway:status", () => gateway!.getStatus());
+  ipcMain.handle("gateway:setBinaryPath", (_e, absPath: string) =>
+    gateway!.setBinaryPath(absPath),
+  );
+  ipcMain.handle("gateway:getBinaryPath", () => gateway!.getBinaryPath());
+  ipcMain.handle("gateway:pickBinary", async () => {
+    const win = getMainWindow();
+    const result = win
+      ? await dialog.showOpenDialog(win, {
+          properties: ["openFile"],
+          title: "Select relaygate binary",
+        })
+      : await dialog.showOpenDialog({
+          properties: ["openFile"],
+          title: "Select relaygate binary",
+        });
+    if (result.canceled || !result.filePaths[0]) return null;
+    return gateway!.setBinaryPath(result.filePaths[0]);
+  });
+
   buildAppMenu();
   createMainWindow();
+
+  // Create tray AFTER first window so getMainWindow() in tray click handlers
+  // resolves to a real window. Returns null when tray construction fails
+  // (e.g. Linux without StatusNotifierItem support) — close-window-hides
+  // behavior below checks for null and falls back to default quit.
+  tray = createTray({
+    gateway: gateway!,
+    mainWindow: () => getMainWindow(),
+    quit: () => {
+      isQuitting = true;
+      app.quit();
+    },
+  });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow();
     }
   });
+});
+
+app.on("before-quit", async (event) => {
+  isQuitting = true;
+  // Tear down tray first so its handlers don't fire mid-quit.
+  if (tray) {
+    try {
+      tray.destroy();
+    } catch {
+      // best effort — platform-handle release; ignore failures during quit
+    }
+    tray = null;
+  }
+  if (!gateway) return;
+  const status = gateway.getStatus();
+  if (status.state === "running" || status.state === "starting") {
+    event.preventDefault();
+    try {
+      // Race the stop against a 6s ceiling so a hung gateway never blocks
+      // quitting indefinitely. Force-quit after the await regardless.
+      const stopPromise = gateway.stop();
+      const timeout = new Promise<void>((resolve) =>
+        setTimeout(resolve, 6000),
+      );
+      await Promise.race([stopPromise, timeout]);
+    } finally {
+      gateway = null;
+      app.quit();
+    }
+  }
 });
 
 app.on("window-all-closed", () => {
