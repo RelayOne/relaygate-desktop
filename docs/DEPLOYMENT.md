@@ -107,9 +107,26 @@ The desktop wrapper loads its UI from a separately-deployed Next.js dashboard (`
 
 All three hosts route to Cloud Run via the same pattern: a Cloudflare CNAME record for the subdomain (`app`, `app.staging`, `app.dev`) pointing at `ghs.googlehosted.com`, with Cloudflare proxying disabled (`proxied: false`) so the SNI handshake reaches Google directly and the Cloud Run-managed cert can serve the right certificate. Cloudflare proxying is intentionally off because Google's managed-cert provisioning relies on validating the request actually hits Google's frontend — proxying through Cloudflare would terminate TLS at Cloudflare, which would force us to manage origin certs ourselves and lose the auto-renewal property.
 
-The Cloud Run domain mapping for each hostname is bound to its respective service via `gcloud beta run domain-mappings create --service=<svc> --domain=<host>`. Once the CNAME resolves, Google's frontend auto-provisions a managed certificate from `pki.goog`; provisioning typically takes 1-5 minutes after the DNS record propagates. Both pre-prod hostnames return HTTP 307 (NextAuth signin redirect) at the dashboard's root path, matching prod's behavior — that's the smoke-validation that the routing is wired correctly.
+The Cloud Run domain mapping for each hostname is bound to its respective service via `gcloud beta run domain-mappings create --service=<svc> --domain=<host>`. Once the CNAME resolves, Google's frontend auto-provisions a managed certificate from `pki.goog`; provisioning typically takes 5-60 minutes after the DNS record propagates (longer in practice — Google's ACME flow has 5-15 minute exponential-backoff retries when the http-01 challenge data isn't immediately visible to all of Google's edge resolvers). Both pre-prod hostnames return HTTP 307 (NextAuth signin redirect) at the dashboard's root path once the cert lands, matching prod's behavior — that's the smoke-validation that the routing is wired correctly.
 
 Desktop binaries built from the `dev` branch default to `app.dev.relaygate.ai`; staging binaries default to `app.staging.relaygate.ai`; main binaries default to `app.relaygate.ai`. The `RELAYGATE_DESKTOP_URL` env var still overrides the default at runtime regardless of build env, so a developer can point a prod-built binary at localhost or staging without rebuilding.
+
+## Per-environment artifact paths
+
+Every published artifact lands at a path that includes its build environment so dev, staging, and prod artifacts never share storage. The trigger sets the environment via the `_ENV` Cloud Build substitution (`prod`, `staging`, or `dev`). The `cloudbuild.yaml` defaults `_ENV` to `prod` so any standalone `gcloud builds submit` run, plus the prod main-push trigger that does not set `_ENV` explicitly, still produce prod-shaped paths.
+
+| Trigger | Branch / event | `_ENV` | Per-build path | "Latest" mirrors |
+|---|---|---|---|---|
+| `relaygate-desktop-binaries` | push to `main` | `prod` (default) | `relaygate-desktop/prod/{SHORT_SHA}/` | `relaygate-desktop/prod/latest/` AND legacy `relaygate-desktop/latest/` |
+| `relaygate-desktop-binaries-staging` | push to `staging` | `staging` | `relaygate-desktop/staging/{SHORT_SHA}/` | `relaygate-desktop/staging/latest/` |
+| `relaygate-desktop-binaries-dev` | push to `dev` | `dev` | `relaygate-desktop/dev/{SHORT_SHA}/` | `relaygate-desktop/dev/latest/` |
+| `relaygate-desktop-pr` | PR → `main` | `prod` (default) | `relaygate-desktop/prod/{SHORT_SHA}/` | none (PR builds skip mirrors) |
+| `relaygate-desktop-pr-staging` | PR → `staging` | `staging` | `relaygate-desktop/staging/{SHORT_SHA}/` | none |
+| `relaygate-desktop-pr-dev` | PR → `dev` | `dev` | `relaygate-desktop/dev/{SHORT_SHA}/` | none |
+
+The legacy `relaygate-desktop/latest/` mirror remains for prod builds only because the public landing page (`relaygate.ai`, separate codebase) currently links the bare `/latest/` path: `https://storage.googleapis.com/relayone-488319-public/relaygate-desktop/latest/RelayGate-Setup-0.1.0.exe` and friends. Migrating those links to `/prod/latest/` is a downstream change tracked separately; until then, the prod publish step writes to BOTH the new env-prefixed path and the bare path so the link-shortening can happen at any time without coordinated cutover.
+
+PR builds skip both the env mirror AND the legacy mirror unconditionally — a PR's artifacts only ever land at `${_ENV}/{SHORT_SHA}/` so reviewers can fetch them by SHA but no human-bookmarked URL ever resolves to a PR-head build. The PR-mode detection uses a `[[ "$TRIGGER_NAME" == relaygate-desktop-pr* ]]` glob so the prod, staging, and dev PR triggers all share the skip behavior.
 
 ## Infrastructure
 
