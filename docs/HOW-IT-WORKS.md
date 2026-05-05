@@ -183,6 +183,31 @@ lets the dashboard render an "Connected to dev/staging/prod" badge or
 adjust client behavior based on which environment the desktop wrapper
 was built for.
 
+Before the first window opens, the main process also installs a
+permission-request handler on the default Electron `session` via
+`session.defaultSession.setPermissionRequestHandler(...)`. By default
+Chromium denies every renderer-initiated permission request silently
+(camera, microphone, geolocation, clipboard read, MIDI, etc.). This is
+correct posture for a wrapped third-party dashboard. The one permission
+the dashboard genuinely needs is `notifications` — for budget alerts,
+provider-outage warnings, and other event-driven signals that are useful
+even when the dashboard window is unfocused. Our handler allows
+`notifications` if and only if the requesting URL's origin matches the
+existing `EXTERNAL_ORIGIN_ALLOWLIST` (or one of the suffix-matched
+first-party domains under `.relaygate.ai` / `.relayone.ai`). Every other
+permission type is denied unconditionally; every non-allowlisted origin
+is denied for notifications too. On Windows the wrapper additionally
+calls `app.setAppUserModelId('ai.relaygate.desktop')` early in
+`whenReady` so that notification toasts attribute to "RelayGate"
+instead of the generic "Electron" label, and so that the desktop entry
+binds correctly when users pin it to the taskbar. From the dashboard
+JS side this is invisible: a call like
+`new Notification('Budget alert', { body: '...' })` Just Works on every
+platform with a notification daemon (Notification Center on macOS,
+Action Center on Windows, libnotify-aware Linux DEs); on headless Linux
+without a notification daemon the call silently constructs and fires
+its `onerror` handler, which is correct degradation.
+
 **Step 6, interactions.** The dashboard JavaScript inside the renderer
 makes XHR and `fetch` calls directly to `api.relaygate.ai` over HTTPS.
 Electron is invisible to that traffic; it does not proxy or inspect it.
@@ -205,6 +230,52 @@ Off-origin in-window navigation hits `will-navigate`
 `target.origin !== DASHBOARD_ORIGIN`, then optionally hands the URL to
 `shell.openExternal` if it is on the allowlist, or logs it to stderr and
 drops it otherwise.
+
+A persistent tray icon ships in the system tray (menu bar on macOS,
+Action-Center notification area on Windows, the Linux notification area
+on desktop environments that support StatusNotifierItem). The icon
+provides a single-click path to show or hide the dashboard, plus a
+right-click (or click on macOS) context menu with state-aware Start
+Gateway / Stop Gateway items, an "Open Logs..." item that signals the
+dashboard via the `tray:open-logs` IPC channel to render its log viewer,
+and a "Configure Binary..." item that fires the same native open-file
+dialog used by `gateway.pickBinary()`. The status label at the top of
+the menu summarizes current state — "Gateway: running on :8090",
+"Gateway: stopped (v1.1.0)", "Gateway: errored — exited code=1", or
+"Gateway: not configured" if the user hasn't picked a binary yet — and
+re-renders on every gateway state transition because `main.ts`'s
+`onStateChange` callback invokes a `__refreshFromStatus` hook on the
+tray. On Windows and Linux the close button (the X in the window chrome)
+intercepts to hide the window rather than quit the app, leaving the
+tray and any running gateway alive in the background. macOS keeps its
+conventional `window-all-closed` hide-on-close pattern instead. If
+`Tray` construction throws on a Linux setup that lacks
+StatusNotifierItem (some headless GNOME configurations), `createTray`
+catches the error and returns `null`; in that case the close
+interceptor is skipped, restoring the default quit-on-close behavior so
+the app remains killable.
+
+The dashboard can also drive a *locally-running* `relaygate` Go gateway
+via the `window.relaygate.gateway` namespace exposed by the preload
+bridge. Calling `await window.relaygate.gateway.pickBinary()` opens a
+native open-file dialog the first time so the user can point the
+wrapper at their installed `relaygate` binary; the path is validated
+(`<binary> --version` must print `relaygate v<semver>` within five
+seconds) and persisted via Electron's `safeStorage` so subsequent
+launches remember it. From there `gateway.start(configPath?)` spawns
+the gateway as a subprocess of the desktop main process,
+`gateway.stop()` sends SIGTERM and falls back to SIGKILL after five
+seconds if the gateway hangs, `gateway.status()` returns the current
+state plus the listen address parsed from the gateway's
+`relaygate listening addr=...` log line, and `gateway.onLog(handler)` /
+`gateway.onStateChange(handler)` stream stderr-parsed slog lines and
+state transitions into the renderer for log viewers and status badges.
+The dashboard renders whatever UI it wants on top of those primitives;
+the desktop wrapper supplies the bridge, not the UI. Quitting the
+desktop process triggers a `before-quit` handler that races
+`gateway.stop()` against a 6-second ceiling so a hung gateway never
+blocks the desktop from exiting — after the race, the desktop quits
+either way and the OS reaps the subprocess if it is still running.
 
 **Step 7, quit.** The `window-all-closed` handler at the bottom of
 `src/main.ts` calls `app.quit()` on every platform other than `darwin`,
