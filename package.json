@@ -26,7 +26,8 @@
     "dist:mac": "npm run build && electron-builder --mac --config electron-builder.mac.yml",
     "dist:win": "npm run build && electron-builder --win",
     "test:smoke": "npm run build && tsx tests/smoke.test.ts",
-    "test:gateway": "tsx tests/gateway.test.ts"
+    "test:gateway": "tsx tests/gateway.test.ts",
+    "test:tray-menu": "tsx tests/tray-menu.test.ts"
   },
   "devDependencies": {
     "@types/node": "^20.16.5",

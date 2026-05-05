@@ -10,6 +10,10 @@ import {
 import * as path from "node:path";
 import { GatewayController } from "./gateway/controller";
 import type { GatewayStatus } from "./gateway/types";
+import { statusLabel, trayMenuEnabledFlags } from "./tray-menu-logic";
+
+// Re-export so callers can keep importing from "./tray" if they want.
+export { statusLabel, trayMenuEnabledFlags };
 
 export interface CreateTrayOpts {
   gateway: GatewayController;
@@ -28,42 +32,12 @@ function trayIconFilename(): string {
   }
 }
 
-function statusLabel(status: GatewayStatus): string {
-  if (!status.binaryPath) return "Gateway: not configured";
-  switch (status.state) {
-    case "running":
-      return status.listenAddr
-        ? `Gateway: running on ${status.listenAddr}`
-        : "Gateway: running";
-    case "starting":
-      return "Gateway: starting...";
-    case "stopping":
-      return "Gateway: stopping...";
-    case "errored":
-      return status.lastError
-        ? `Gateway: errored — ${truncate(status.lastError, 60)}`
-        : "Gateway: errored";
-    case "stopped":
-    default:
-      return status.binaryVersion
-        ? `Gateway: stopped (v${status.binaryVersion})`
-        : "Gateway: stopped";
-  }
-}
-
-function truncate(s: string, max: number): string {
-  if (s.length <= max) return s;
-  return s.slice(0, max - 1) + "…";
-}
-
 export function buildTrayMenu(
   status: GatewayStatus,
   opts: CreateTrayOpts,
 ): Menu {
   const isMac = process.platform === "darwin";
-  const isStopped = status.state === "stopped" || status.state === "errored";
-  const isRunning = status.state === "running";
-  const hasBinary = !!status.binaryPath;
+  const { start: startEnabled, stop: stopEnabled } = trayMenuEnabledFlags(status);
 
   const template: MenuItemConstructorOptions[] = [
     {
@@ -91,7 +65,7 @@ export function buildTrayMenu(
     },
     {
       label: "Start Gateway",
-      enabled: isStopped && hasBinary,
+      enabled: startEnabled,
       click: () => {
         void opts.gateway.start().catch((err: Error) =>
           process.stderr.write(`[tray] gateway start failed: ${err.message}\n`),
@@ -100,7 +74,7 @@ export function buildTrayMenu(
     },
     {
       label: "Stop Gateway",
-      enabled: isRunning,
+      enabled: stopEnabled,
       click: () => {
         void opts.gateway.stop().catch((err: Error) =>
           process.stderr.write(`[tray] gateway stop failed: ${err.message}\n`),
