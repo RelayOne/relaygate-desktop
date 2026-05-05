@@ -233,6 +233,12 @@ function buildAppMenu(): void {
 }
 
 void app.whenReady().then(() => {
+  // Windows: associate native notifications + taskbar pinning with the
+  // installed AppUserModelID (matches `appId` in electron-builder.yml). Without
+  // this, Windows attributes notification toasts to "Electron" rather than
+  // "RelayGate". No-op on macOS and Linux per Electron docs.
+  app.setAppUserModelId("ai.relaygate.desktop");
+
   buildAppMenu();
   createMainWindow();
 
