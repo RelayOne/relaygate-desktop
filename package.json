@@ -25,7 +25,8 @@
     "dist:linux": "npm run build && electron-builder --linux",
     "dist:mac": "npm run build && electron-builder --mac --config electron-builder.mac.yml",
     "dist:win": "npm run build && electron-builder --win",
-    "test:smoke": "npm run build && tsx tests/smoke.test.ts"
+    "test:smoke": "npm run build && tsx tests/smoke.test.ts",
+    "test:gateway": "tsx tests/gateway.test.ts"
   },
   "dependencies": {},
   "devDependencies": {
