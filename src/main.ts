@@ -1,6 +1,9 @@
-import { app, BrowserWindow, Menu, session, shell } from "electron";
+import { app, BrowserWindow, Menu, dialog, ipcMain, session, shell } from "electron";
 import * as fs from "node:fs";
 import * as path from "node:path";
+
+import { GatewayController } from "./gateway/controller";
+import { SafeStorageBinaryPathStore } from "./gateway/storage";
 
 type BuildEnv = "prod" | "staging" | "dev";
 
@@ -240,6 +243,15 @@ function buildAppMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+// Lazy-init: GatewayController + IPC handlers depend on app.whenReady() so
+// safeStorage and app.getPath("userData") are usable. Kept module-level so
+// before-quit can reference it.
+let gateway: GatewayController | null = null;
+
+function getMainWindow(): BrowserWindow | null {
+  return BrowserWindow.getAllWindows()[0] ?? null;
+}
+
 void app.whenReady().then(() => {
   // Windows: associate native notifications + taskbar pinning with the
   // installed AppUserModelID (matches `appId` in electron-builder.yml). Without
@@ -272,6 +284,41 @@ void app.whenReady().then(() => {
     },
   );
 
+  // Instantiate gateway controller before the first window so the dashboard's
+  // first calls into window.relaygate.gateway.* find live IPC handlers.
+  gateway = new GatewayController(
+    {
+      onLog: (line) => getMainWindow()?.webContents.send("gateway:log", line),
+      onStateChange: (s) =>
+        getMainWindow()?.webContents.send("gateway:state", s),
+    },
+    new SafeStorageBinaryPathStore(app.getPath("userData")),
+  );
+
+  ipcMain.handle("gateway:start", (_e, configPath?: string) =>
+    gateway!.start(configPath),
+  );
+  ipcMain.handle("gateway:stop", () => gateway!.stop());
+  ipcMain.handle("gateway:status", () => gateway!.getStatus());
+  ipcMain.handle("gateway:setBinaryPath", (_e, absPath: string) =>
+    gateway!.setBinaryPath(absPath),
+  );
+  ipcMain.handle("gateway:getBinaryPath", () => gateway!.getBinaryPath());
+  ipcMain.handle("gateway:pickBinary", async () => {
+    const win = getMainWindow();
+    const result = win
+      ? await dialog.showOpenDialog(win, {
+          properties: ["openFile"],
+          title: "Select relaygate binary",
+        })
+      : await dialog.showOpenDialog({
+          properties: ["openFile"],
+          title: "Select relaygate binary",
+        });
+    if (result.canceled || !result.filePaths[0]) return null;
+    return gateway!.setBinaryPath(result.filePaths[0]);
+  });
+
   buildAppMenu();
   createMainWindow();
 
@@ -280,6 +327,26 @@ void app.whenReady().then(() => {
       createMainWindow();
     }
   });
+});
+
+app.on("before-quit", async (event) => {
+  if (!gateway) return;
+  const status = gateway.getStatus();
+  if (status.state === "running" || status.state === "starting") {
+    event.preventDefault();
+    try {
+      // Race the stop against a 6s ceiling so a hung gateway never blocks
+      // quitting indefinitely. Force-quit after the await regardless.
+      const stopPromise = gateway.stop();
+      const timeout = new Promise<void>((resolve) =>
+        setTimeout(resolve, 6000),
+      );
+      await Promise.race([stopPromise, timeout]);
+    } finally {
+      gateway = null;
+      app.quit();
+    }
+  }
 });
 
 app.on("window-all-closed", () => {

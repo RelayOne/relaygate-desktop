@@ -231,6 +231,28 @@ Off-origin in-window navigation hits `will-navigate`
 `shell.openExternal` if it is on the allowlist, or logs it to stderr and
 drops it otherwise.
 
+The dashboard can also drive a *locally-running* `relaygate` Go gateway
+via the `window.relaygate.gateway` namespace exposed by the preload
+bridge. Calling `await window.relaygate.gateway.pickBinary()` opens a
+native open-file dialog the first time so the user can point the
+wrapper at their installed `relaygate` binary; the path is validated
+(`<binary> --version` must print `relaygate v<semver>` within five
+seconds) and persisted via Electron's `safeStorage` so subsequent
+launches remember it. From there `gateway.start(configPath?)` spawns
+the gateway as a subprocess of the desktop main process,
+`gateway.stop()` sends SIGTERM and falls back to SIGKILL after five
+seconds if the gateway hangs, `gateway.status()` returns the current
+state plus the listen address parsed from the gateway's
+`relaygate listening addr=...` log line, and `gateway.onLog(handler)` /
+`gateway.onStateChange(handler)` stream stderr-parsed slog lines and
+state transitions into the renderer for log viewers and status badges.
+The dashboard renders whatever UI it wants on top of those primitives;
+the desktop wrapper supplies the bridge, not the UI. Quitting the
+desktop process triggers a `before-quit` handler that races
+`gateway.stop()` against a 6-second ceiling so a hung gateway never
+blocks the desktop from exiting — after the race, the desktop quits
+either way and the OS reaps the subprocess if it is still running.
+
 **Step 7, quit.** The `window-all-closed` handler at the bottom of
 `src/main.ts` calls `app.quit()` on every platform other than `darwin`,
 matching standard Electron quit semantics. On macOS, the dock icon stays

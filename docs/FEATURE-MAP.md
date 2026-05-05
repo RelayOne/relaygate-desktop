@@ -34,8 +34,8 @@ What the user actually sees and interacts with after launching the app. The shel
 | Configurable backend URL | Devs can point the app at local dev or staging via `RELAYGATE_DESKTOP_URL` env var without rebuilding | Done | `src/main.ts:6-22` |
 | Env-aware default dashboard URL (per build env) | A binary built from the `dev` branch defaults to `app.dev.relaygate.ai`, `staging` to `app.staging.relaygate.ai`, `main` to `app.relaygate.ai` — testers running pre-prod builds connect to the matching pre-prod backend automatically, no env-var setup needed | Done | `src/main.ts:5-30` |
 | Build SHA exposed at runtime | Users can report exact build version when filing bugs — visible via `window.relaygate.version` from the preload bridge | Done | `src/preload.ts` |
-| Native gateway control panel | Manage a locally-running `relaygate` CLI gateway (start/stop, view logs, edit routing rules) without leaving the app | Scoped | `specs/native-gateway-control-panel.md` |
-| OS notifications | Get notified of relay events, budget alerts, or provider outages without keeping the window focused | Done | `src/main.ts:240-275` (setAppUserModelId + setPermissionRequestHandler allowlist) |
+| Native gateway control panel | Manage a locally-running `relaygate` CLI gateway (start/stop, view logs, edit routing rules) without leaving the app | Done | `src/gateway/` (controller + storage + types) + `window.relaygate.gateway.*` preload bridge |
+| OS notifications | Get notified of relay events, budget alerts, or provider outages without keeping the window focused | Done | `src/main.ts` (setAppUserModelId + setPermissionRequestHandler allowlist) |
 | System tray icon | Quick access to start/stop the local gateway from the menu bar / system tray | Scoped | `specs/system-tray-icon.md` |
 
 ## Security
