@@ -100,19 +100,23 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
 done
 
 echo "[win-smoke] === Phase 3: copy installer + run smoke ==="
-# Pull the .exe from GCS to the local Cloud Build workspace, then SCP to the VM.
-# Cloud Build workers don't have gcloud-on-the-VM-side fetch the exe (would need
-# a separate IAM round-trip), so we tunnel it through the local workspace.
-gcloud storage cp \
-  "gs://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/${EXE_NAME}" \
-  "/workspace/${EXE_NAME}"
+# Source the .exe from the local Cloud Build workspace if present (the typical
+# case — smoke-test-win runs after dist-all-platforms before publish), else
+# fall back to GCS (manual smoke re-run case).
+LOCAL_EXE="/workspace/release/${EXE_NAME}"
+if [ ! -f "${LOCAL_EXE}" ]; then
+  echo "[win-smoke] local .exe not found; pulling from GCS"
+  gcloud storage cp \
+    "gs://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/${EXE_NAME}" \
+    "${LOCAL_EXE}"
+fi
 
 gcloud compute scp \
   --zone="${ZONE}" \
   --project="${PROJECT_ID}" \
   --tunnel-through-iap \
   --quiet \
-  "/workspace/${EXE_NAME}" \
+  "${LOCAL_EXE}" \
   "${INSTANCE_NAME}:C:/Users/Public/${EXE_NAME}"
 
 # Run nsis silent install + clone test fixture + run Puppeteer-CDP smoke.
