@@ -173,8 +173,25 @@ steps:
         ls -la release/*.dmg
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    id: smoke-test-win
+    waitFor: ['dist-all-platforms']
+    entrypoint: bash
+    args:
+      - -euc
+      - |
+        # Cross-platform Windows smoke. Provisions an ephemeral GCE Windows
+        # Server 2022 VM via scripts/win-smoke.sh, runs the cross-compiled
+        # nsis installer + Puppeteer-CDP smoke, tears down the VM. Runs in
+        # parallel with build-mac-dmg; publish.waitFor includes both.
+        # See specs/cross-platform-smoke.md TASK-1/2/3 + Path B authorization
+        # 2026-05-05. SA roles/compute.instanceAdmin.v1 was granted in commit
+        # a6f835a as part of this rollout.
+        export _ENV="${_ENV}"
+        bash scripts/win-smoke.sh
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
     id: publish
-    waitFor: ['build-mac-dmg']
+    waitFor: ['build-mac-dmg', 'smoke-test-win']
     entrypoint: bash
     args:
       - -c
