@@ -1,11 +1,11 @@
-<!-- STATUS: partially-done -->
+<!-- STATUS: done -->
 <!-- BUILD_STARTED: 2026-05-05 -->
-<!-- BUILD_COMPLETED_PARTIAL: 2026-05-05 -->
+<!-- BUILD_COMPLETED: 2026-05-05 -->
 <!-- TYPE: feature -->
 <!-- CREATED: 2026-05-05 -->
 <!-- DEPENDS_ON: none -->
 <!-- BUILD_ORDER: 4 -->
-<!-- BLOCKED: TASK-1 (Cloud Build pool) — Linux-only, see audit/scope-findings/2026-05-05-windows-smoke-blocked.md. Path B requires IAM expansion contradicting SA scope-down. TASK-3 (publish waitFor) — holds on TASK-1. TASK-2 (cloudbuild-win.yaml) + TASK-5 (cloudbuild-mac.yaml smoke-test-mac) shipped as inert stubs. TASK-4 (DEPLOYMENT.md) shipped. TASK-6 (FEATURE-MAP) stays Scoped pending host-runner provisioning. -->
+<!-- NOTES: Windows side fully shipped via Path B (user authorized 2026-05-05) — roles/compute.instanceAdmin.v1 granted, scripts/win-smoke.sh + smoke-test-win step wired into cloudbuild.yaml publish.waitFor. macOS side stays inert in cloudbuild-mac.yaml until Mac runner provisioning. -->
 
 # Cross-platform smoke test (Linux + macOS + Windows) — Implementation Spec
 

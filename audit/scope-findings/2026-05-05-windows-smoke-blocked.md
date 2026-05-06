@@ -28,6 +28,15 @@ Real infra implications:
 
 ## Status
 
+STATUS: RESOLVED (2026-05-05) — user authorized Path B. `roles/compute.instanceAdmin.v1` granted to `relaygate-desktop-ci@` (audit-trail commit `a6f835a`); `scripts/win-smoke.sh` + `smoke-test-win` step wired into `cloudbuild.yaml`'s `publish.waitFor` (commits `f47a262` + `719235e`).
+
+The IAM expansion is the documented trade-off: the CI SA can now create/delete GCE instances within the project. Mitigations:
+- VM uses the SA itself as runtime SA (no cross-SA grant needed)
+- Trap-EXIT cleanup deletes the VM regardless of smoke pass/fail (no orphaned cost-accumulating instances)
+- IAP-tunneled SSH eliminates need for public-IP firewall management
+
+### Original status (kept for history)
+
 STATUS: BLOCKED — reason: Path B requires IAM scope expansion that contradicts the just-completed SA scope-down audit. Decision needs user authorization before proceeding.
 
 ## What this PR does ship

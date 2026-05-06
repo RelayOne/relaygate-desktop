@@ -76,7 +76,7 @@ Two test suites, both end-to-end via Puppeteer attaching to Electron over the Ch
 | Puppeteer-CDP smoke test | Catch regressions where the dashboard fails to render in our exact Electron + Chromium build (catches Electron upgrade breakage) | Done | `tests/smoke.test.ts` |
 | Live-dashboard regression suite | Catches if `app.relaygate.ai` ships a change that breaks the desktop wrapper (signin, dashboard render, mobile viewport, SEO meta) | Done | `tests/live-dashboard.test.ts` |
 | CI-integrated test run | Smoke tests gate every Cloud Build — broken builds never publish to GCS | Done | `cloudbuild.yaml:smoke-test` (xvfb-run + 3-attempt retry; runs between `build-main` and `dist-all-platforms`) |
-| Cross-platform smoke (one per OS) | Catch regressions specific to one platform's Electron+Chromium combination (currently only Linux is auto-tested) | Scoped | `cloudbuild-mac.yaml` (smoke-test-mac step) + `cloudbuild-win.yaml` — both inert until host runners ship; transitions to Done when first runner is wired |
+| Cross-platform smoke (one per OS) | Catch regressions specific to one platform's Electron+Chromium combination — every push and PR runs the cross-compiled Windows nsis through Puppeteer-CDP smoke on a real Windows Server 2022 VM before publish | Done (Linux + Windows) | `cloudbuild.yaml` (smoke-test step Linux) + `scripts/win-smoke.sh` + `cloudbuild.yaml` smoke-test-win step (ephemeral GCE Windows VM via Path B). macOS smoke wired in `cloudbuild-mac.yaml` but inert until Mac runner host arrives. |
 
 ## Documentation
 
