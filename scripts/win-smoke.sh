@@ -135,11 +135,23 @@ gcloud compute ssh "${INSTANCE_NAME}" \
     }
     if (-not (Test-Path \\\"\$bin\\\")) { throw 'RelayGate.exe not found after install' }
     Write-Output \\\"smoke target: \$bin\\\"
-    git clone --depth=1 --branch=main https://github.com/RelayOne/relaygate-desktop.git C:\\rg-smoke
+    # Full clone so any commit is reachable, then fetch the build's specific
+    # commit (PR commits aren't in main yet, so a depth=1 main-only clone
+    # would fail at checkout). Falls back to whatever HEAD ends up checked
+    # out if COMMIT_SHA fetch fails — the smoke fixture itself is decoupled
+    # from the .exe's source tree (the binary under test is the installed
+    # RelayGate.exe; the fixture just drives Puppeteer-CDP against it).
+    git clone https://github.com/RelayOne/relaygate-desktop.git C:\\rg-smoke
     cd C:\\rg-smoke
-    git checkout ${COMMIT_SHA}
+    git fetch origin ${COMMIT_SHA} 2>&1 | Out-File -FilePath C:\\git-fetch.log
+    git checkout ${COMMIT_SHA} 2>&1 | Out-File -FilePath C:\\git-checkout.log
     npm ci --no-audit --no-fund 2>&1 | Out-File -FilePath C:\\npm-ci.log
-    \$env:ELECTRON_OVERRIDE_BIN = \\\"\$bin\\\"
+    # RELAYGATE_TEST_BIN points smoke.test.ts at the installed RelayGate.exe
+    # instead of node_modules/.bin/electron + APP_ENTRY (source-tree mode).
+    # RELAYGATE_TEST_ENV propagates the build's _ENV so dashboard URL
+    # expectations align with what the .exe was compiled for.
+    \$env:RELAYGATE_TEST_BIN = \\\"\$bin\\\"
+    \$env:RELAYGATE_TEST_ENV = \\\"${_ENV}\\\"
     npx tsx tests/smoke.test.ts
   \""
 
