@@ -28,7 +28,7 @@ Real infra implications:
 
 ## Status
 
-STATUS: RESOLVED (2026-05-05) — user authorized Path B. `roles/compute.instanceAdmin.v1` granted to `relaygate-desktop-ci@` (audit-trail commit `a6f835a`); `scripts/win-smoke.sh` + `smoke-test-win` step wired into `cloudbuild.yaml`'s `publish.waitFor` (commits `f47a262` + `719235e`).
+STATUS: PARTIAL (2026-05-08) — user authorized Path B and the infrastructure (IAM grants + driver script + audit doc) is landed, but the `smoke-test-win` cloudbuild step has been **deferred from `publish.waitFor`** until the VM startup-script + SSH-propagation iteration completes. Three IAM grants (`compute.instanceAdmin.v1`, `iam.serviceAccountUser` self-binding, `iap.tunnelResourceAccessor`), the full `scripts/win-smoke.sh` driver, the `RELAYGATE_TEST_BIN`/`RELAYGATE_TEST_ENV` smoke fixture support, and seven validation findings (catalogued below) are in the repo and ready. Re-wire when the smoke is reliably passing.
 
 ### Latent bugs surfaced during validation (2026-05-08)
 

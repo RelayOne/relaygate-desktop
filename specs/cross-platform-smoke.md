@@ -1,11 +1,11 @@
-<!-- STATUS: done -->
+<!-- STATUS: in-progress -->
 <!-- BUILD_STARTED: 2026-05-05 -->
-<!-- BUILD_COMPLETED: 2026-05-05 -->
+<!-- BUILD_COMPLETED: -->
 <!-- TYPE: feature -->
 <!-- CREATED: 2026-05-05 -->
 <!-- DEPENDS_ON: none -->
 <!-- BUILD_ORDER: 4 -->
-<!-- NOTES: Windows side fully shipped via Path B (user authorized 2026-05-05) — roles/compute.instanceAdmin.v1 granted, scripts/win-smoke.sh + smoke-test-win step wired into cloudbuild.yaml publish.waitFor. macOS side stays inert in cloudbuild-mac.yaml until Mac runner provisioning. -->
+<!-- NOTES: Linux smoke shipped end-to-end (cloudbuild.yaml smoke-test step). Path B Windows infrastructure landed (scripts/win-smoke.sh + IAM grants: compute.instanceAdmin.v1, iam.serviceAccountUser self-binding, iap.tunnelResourceAccessor) but smoke-test-win NOT yet wired into publish.waitFor — VM startup-script timing (Chocolatey/Node/Git/OpenSSH first-boot install) and SSH-key-propagation behavior still being iterated. macOS half stays inert in cloudbuild-mac.yaml until Mac runner provisioning. -->
 
 # Cross-platform smoke test (Linux + macOS + Windows) — Implementation Spec
 
