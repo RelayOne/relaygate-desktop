@@ -1,0 +1,110 @@
+# cloudbuild-win.yaml — Windows smoke + signed-exe future-state pipeline.
+#
+# This pipeline is intended for execution against a self-hosted Windows
+# host (NUC, Mac mini bootcamp, Hetzner Windows VM, AWS EC2 Windows, or a
+# user-provisioned GCE Windows instance) reachable over SSH. Cloud Build
+# private pools do NOT support Windows machine types as of 2026-05-05
+# (verified via gcloud builds worker-pools create — see audit/scope-findings/
+# 2026-05-05-windows-smoke-blocked.md), so this YAML is consumed by a Cloud
+# Build job that uses an SSH-tunneled remote runner — the same pattern used
+# by cloudbuild-mac.yaml.
+#
+# When ready to run Windows smoke in CI:
+# 1. Provision a Windows host:
+#    - Cheapest: a NUC at the office on a residential ISP
+#    - Managed: GCE Windows Server 2022 instance (requires the
+#      relaygate-desktop-ci@ SA to gain roles/compute.instances.* — material
+#      IAM expansion that contradicts the 2026-05-04 SA scope-down audit;
+#      pursue only after explicit user authorization)
+#    - Cloud rental: AWS EC2 Windows / Hetzner Windows / etc.
+# 2. Install OpenSSH Server on Windows ("Add an optional feature" → OpenSSH
+#    Server) and start the sshd service. Ensure the firewall allows port 22
+#    inbound from Cloud Build's worker IP range.
+# 3. Generate an ed25519 key pair, install the public key under the runner
+#    user's `%USERPROFILE%\.ssh\authorized_keys`, store the private key in
+#    Secret Manager: `gcloud secrets create relaygate-desktop-win-deploy-key
+#    --data-file=win-deploy-key`.
+# 4. Install on the Windows host: Git for Windows, Node.js 20 LTS, Visual
+#    Studio Build Tools (for native deps if any). Configure PowerShell
+#    execution policy to allow scripts.
+# 5. Wrap this YAML in a Cloud Build trigger pointed at the same
+#    `relaygate-desktop-repo` connection. Set `_WIN_RUNNER_HOST` via
+#    `--substitutions` on the trigger; default `_WIN_RUNNER_USER` is
+#    `cloudbuild`.
+# 6. (Optional, future) When an EV code signing certificate is available
+#    (~$300/yr from DigiCert/Sectigo), add Secret Manager entries for the
+#    cert + token-based signing rig, and extend this pipeline to invoke
+#    `signtool.exe` after dist:win produces the .exe.
+#
+# Until then, Windows smoke is BLOCKED on the runner-host decision (see
+# audit/scope-findings/2026-05-05-windows-smoke-blocked.md). The cross-
+# platform Linux pipeline (cloudbuild.yaml) already produces the unsigned
+# RelayGate-Setup-0.1.0*.exe via electron-builder + Wine cross-compile —
+# we just don't run it on a real Windows OS in CI yet.
+
+substitutions:
+  _WIN_RUNNER_HOST: ''   # set per-deployment via --substitutions
+  _WIN_RUNNER_USER: 'cloudbuild'
+
+steps:
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    id: ssh-win-runner-smoke
+    entrypoint: bash
+    args:
+      - -euc
+      - |
+        # Inert until _WIN_RUNNER_HOST is set. Matches cloudbuild-mac.yaml's
+        # pattern. Once a Windows host is wired up, this step:
+        #   1. Pulls the .exe artifact from the just-finished Linux build's
+        #      gs://...{COMMIT_SHA}/ prefix
+        #   2. SCPs it to the Windows runner
+        #   3. Runs the nsis installer silently (`/S` flag)
+        #   4. Invokes the Puppeteer-CDP smoke against the installed app
+        #   5. Captures stdout/stderr/screenshots back to /workspace/release/
+        # Step is gated to NOT block publish until host is real (publish
+        # waitFor in the main cloudbuild.yaml is unchanged).
+        if [ -z "${_WIN_RUNNER_HOST}" ]; then
+          echo "skipping win smoke (no _WIN_RUNNER_HOST set; see audit/scope-findings/2026-05-05-windows-smoke-blocked.md for runner provisioning options)"
+          exit 0
+        fi
+
+        gcloud secrets versions access latest \
+          --secret="relaygate-desktop-win-deploy-key" \
+          --project="$PROJECT_ID" > /workspace/deploy_key
+        chmod 600 /workspace/deploy_key
+        SSH_ARGS="-i /workspace/deploy_key -o StrictHostKeyChecking=no -o BatchMode=yes"
+
+        # Pull the just-built nsis installer from the prod-mode (or PR-mode)
+        # GCS path. The trigger driving this YAML must be configured with the
+        # same _ENV substitution so we land on the right path.
+        EXE=RelayGate-Setup-0.1.0.exe
+        gcloud storage cp \
+          "gs://relayone-488319-public/relaygate-desktop/${_ENV:-prod}/$SHORT_SHA/$$EXE" \
+          /workspace/$$EXE
+
+        # Transfer + install + smoke (all on the Windows runner). The smoke
+        # fixture in tests/smoke.test.ts is platform-agnostic — only the
+        # binary path differs. Windows nsis silent install puts RelayGate.exe
+        # at %LOCALAPPDATA%\Programs\RelayGate\RelayGate.exe.
+        REMOTE=${_WIN_RUNNER_USER}@${_WIN_RUNNER_HOST}
+        scp $$SSH_ARGS /workspace/$$EXE $$REMOTE:/Users/${_WIN_RUNNER_USER}/$$EXE
+
+        ssh $$SSH_ARGS $$REMOTE "powershell -Command \"
+          Set-StrictMode -Version Latest
+          \$ErrorActionPreference = 'Stop'
+          # Silent install
+          Start-Process -FilePath \\\"\$env:USERPROFILE\\$$EXE\\\" -ArgumentList '/S' -Wait
+          \$bin = \\\"\$env:LOCALAPPDATA\\Programs\\RelayGate\\RelayGate.exe\\\"
+          if (-not (Test-Path \\\"\$bin\\\")) { throw 'RelayGate.exe not found after install' }
+          # Pull the test fixture standalone (avoids needing the full repo on the runner)
+          git clone --depth=1 --branch=main https://github.com/RelayOne/relaygate-desktop.git C:\\rg-smoke
+          cd C:\\rg-smoke
+          git checkout $COMMIT_SHA
+          npm ci --no-audit --no-fund
+          \$env:ELECTRON_OVERRIDE_BIN = \$bin
+          npx tsx tests/smoke.test.ts
+        \""
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_MEDIUM
