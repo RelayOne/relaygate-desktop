@@ -83,19 +83,33 @@ gcloud compute instances create "${INSTANCE_NAME}" \
   --no-shielded-secure-boot \
   --quiet
 
-echo "[win-smoke] === Phase 2: wait for SSH + startup script (up to 8 min) ==="
-deadline=$(( $(date +%s) + 480 ))
+echo "[win-smoke] === Phase 2: wait for SSH + startup script (up to 12 min) ==="
+# 12-min ceiling: Windows Server 2022 boot (~60s) + Chocolatey first-time
+# install (~3-5min) + Node 20 + Git + OpenSSH Windows-capability install
+# (~4-6min combined). 8 min was too tight; 12 min gives a buffer.
+# Capture SSH stderr to a per-attempt log so failures are diagnosable —
+# silencing 2>/dev/null masked an IAP-not-authorized error that took a
+# whole separate build to identify (build d9626363/3d9a6ee7).
+SSH_LOG_DIR="/tmp/win-smoke-ssh"
+mkdir -p "${SSH_LOG_DIR}"
+deadline=$(( $(date +%s) + 720 ))
+attempt=0
 while [ "$(date +%s)" -lt "$deadline" ]; do
+  attempt=$((attempt + 1))
+  ssh_err="${SSH_LOG_DIR}/poll-${attempt}.err"
   if gcloud compute ssh "${INSTANCE_NAME}" \
       --zone="${ZONE}" \
       --project="${PROJECT_ID}" \
       --tunnel-through-iap \
       --quiet \
-      --command='powershell -Command "Test-Path C:\smoke-ready.txt"' 2>/dev/null | grep -q True; then
-    echo "[win-smoke] startup script complete; SSH ready"
+      --command='powershell -Command "Test-Path C:\smoke-ready.txt"' 2>"${ssh_err}" | grep -q True; then
+    echo "[win-smoke] startup script complete; SSH ready (attempt ${attempt})"
     break
   fi
-  echo "[win-smoke] waiting for VM... ($(( deadline - $(date +%s) ))s remaining)"
+  # Show the last error line so iteration of any non-transient failures
+  # (auth, firewall, IAP role) doesn't require log archaeology.
+  last_err=$(tail -1 "${ssh_err}" 2>/dev/null || true)
+  echo "[win-smoke] waiting for VM... ($(( deadline - $(date +%s) ))s remaining; last: ${last_err:-<none>})"
   sleep 20
 done
 

@@ -55,6 +55,8 @@ After the initial wiring, three latent bugs surfaced when the first PR build att
 
    This is within the Path B authorization scope: the user authorized the IAM expansion needed for ephemeral VM provisioning; this self-binding is part of what's required to make that pattern work.
 
+7. **`roles/iap.tunnelResourceAccessor` required for IAP-tunneled SSH/SCP** (build `3d9a6ee7`) — `gcloud compute ssh --tunnel-through-iap` failed with `Error while connecting [4033: 'not authorized']`. The CI SA had `roles/compute.instanceAdmin.v1` (instance create/delete) but no IAP tunnel role, so the websocket tunnel API rejected the connection. The firewall side was already correct (project-wide `allow-iap-ssh` rule allows TCP:22 from 35.235.240.0/20, the IAP source range). Granted `roles/iap.tunnelResourceAccessor` at the project level. Like finding 6, this is part of what Path B requires; the original audit doc only called out instance create/delete. Also bumped the win-smoke.sh SSH-poll timeout from 8min to 12min and stopped silencing SSH stderr, so the next iteration's diagnostics would surface this kind of error directly instead of via timeout-and-then-mystery-failure on the next phase.
+
 The IAM expansion is the documented trade-off: the CI SA can now create/delete GCE instances within the project. Mitigations:
 - VM uses the SA itself as runtime SA (no cross-SA grant needed)
 - Trap-EXIT cleanup deletes the VM regardless of smoke pass/fail (no orphaned cost-accumulating instances)
