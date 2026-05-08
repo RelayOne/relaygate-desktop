@@ -172,6 +172,18 @@ steps:
         build_dmg "RelayGate-0.1.0-arm64-mac.zip" arm64
         ls -la release/*.dmg
 
+  # Windows smoke step (smoke-test-win, ephemeral GCE Windows VM via Path B)
+  # is intentionally NOT wired into this pipeline at present. The driver
+  # script (scripts/win-smoke.sh) and the required IAM grants (compute.
+  # instanceAdmin.v1, iam.serviceAccountUser self-binding, iap.tunnel-
+  # ResourceAccessor — see audit/scope-findings/2026-05-05-windows-smoke-
+  # blocked.md for the full picture) are landed and ready, but VM startup-
+  # script timing (Chocolatey + Node + Git + OpenSSH-Server first-boot
+  # install) and SSH-key-propagation behavior is still being iterated on.
+  # Until the smoke is proven to pass reliably, gating publish on it would
+  # block every dev build. Re-wire here once stable. The mac smoke is in a
+  # similar deferred-but-scaffolded state in cloudbuild-mac.yaml.
+
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
     id: publish
     waitFor: ['build-mac-dmg']

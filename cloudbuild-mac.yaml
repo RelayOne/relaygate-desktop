@@ -62,8 +62,52 @@ steps:
         scp $$SSH_ARGS -r "${_MAC_RUNNER_USER}@${_MAC_RUNNER_HOST}:/tmp/relaygate-desktop-build/release/*.dmg" /workspace/release/
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-    id: publish-mac-dmg
+    id: smoke-test-mac
     waitFor: ['ssh-mac-runner-build']
+    entrypoint: bash
+    args:
+      - -euc
+      - |
+        # macOS smoke step — runs Puppeteer-CDP against the just-built RelayGate.app
+        # on the same Mac host that built it. Inert until _MAC_RUNNER_HOST is set
+        # (matches the rest of this pipeline's pattern).
+        if [ -z "${_MAC_RUNNER_HOST}" ]; then
+          echo "skipping mac smoke (no _MAC_RUNNER_HOST)"
+          exit 0
+        fi
+
+        gcloud secrets versions access latest \
+          --secret="relaygate-desktop-mac-deploy-key" \
+          --project="$PROJECT_ID" > /workspace/deploy_key
+        chmod 600 /workspace/deploy_key
+        SSH_ARGS="-i /workspace/deploy_key -o StrictHostKeyChecking=no -o BatchMode=yes"
+
+        # The Mac host already ran npm ci/build/dist:mac in ssh-mac-runner-build.
+        # We just invoke the smoke fixture against the produced .app bundle.
+        # tests/smoke.test.ts spawns Electron with --remote-debugging-port and
+        # attaches via CDP — same fixture used on Linux, only the binary path
+        # differs. tsx is already installed (devDep) from npm ci above.
+        ssh $$SSH_ARGS "${_MAC_RUNNER_USER}@${_MAC_RUNNER_HOST}" "
+          set -euxo pipefail
+          cd /tmp/relaygate-desktop-build
+          # Mount the .app from the freshly-built mac/RelayGate.app produced by
+          # electron-builder, NOT the .dmg (mounting requires extra hdiutil flags
+          # that vary by host config; .app is what users see post-install anyway).
+          export ELECTRON_BIN=\$(find release/mac -maxdepth 4 -name RelayGate -path '*Contents/MacOS/*' | head -1)
+          if [ -z \"\$ELECTRON_BIN\" ]; then
+            echo 'ERROR: could not find RelayGate binary inside release/mac/'
+            ls -la release/mac/ release/mac-arm64/ 2>&1 || true
+            exit 1
+          fi
+          echo \"smoke target: \$ELECTRON_BIN\"
+          # Run smoke. macOS does not need xvfb — the fixture handles GUI vs
+          # headless via Electron's --remote-debugging-port.
+          ELECTRON_OVERRIDE_BIN=\"\$ELECTRON_BIN\" npx tsx tests/smoke.test.ts
+        "
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    id: publish-mac-dmg
+    waitFor: ['smoke-test-mac']
     entrypoint: bash
     args:
       - -euc

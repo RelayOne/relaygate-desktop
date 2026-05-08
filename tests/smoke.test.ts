@@ -6,7 +6,16 @@ import puppeteer from "puppeteer-core";
 
 const DEBUG_PORT = 9222;
 const ARTIFACT_DIR = path.resolve(__dirname, "artifacts");
-const ELECTRON_BIN = path.resolve(__dirname, "..", "node_modules", ".bin", "electron");
+// RELAYGATE_TEST_BIN points smoke at an INSTALLED RelayGate binary (the
+// cross-platform Path B win-smoke runs the cross-compiled .exe through nsis
+// install, then sets this var to %LOCALAPPDATA%\Programs\RelayGate\RelayGate.exe).
+// When set, the bundled app inside the .exe is launched directly — APP_ENTRY
+// is not passed because the binary has its own embedded main process.
+// When unset, fall back to the source-tree pattern: node_modules/.bin/electron
+// + APP_ENTRY (the repo root). Both flows write the same debug port + smoke
+// assertion logic.
+const PACKAGED_BIN = process.env.RELAYGATE_TEST_BIN ?? "";
+const ELECTRON_BIN = PACKAGED_BIN || path.resolve(__dirname, "..", "node_modules", ".bin", "electron");
 const APP_ENTRY = path.resolve(__dirname, "..");
 const STARTUP_TIMEOUT_MS = 60_000;
 const PAGE_READY_TIMEOUT_MS = 45_000;
@@ -21,6 +30,16 @@ const DASHBOARD_URL_BY_ENV: Record<SmokeEnv, string> = {
   dev: "https://app.dev.relaygate.ai",
 };
 function readSmokeEnv(): SmokeEnv {
+  // RELAYGATE_TEST_ENV overrides the package.json read — Path B's win-smoke
+  // runs the smoke fixture from a fresh clone (where package.json has no
+  // env field, defaults prod), but the cross-compiled .exe under test was
+  // built for whatever _ENV the cloudbuild used. Caller (scripts/win-smoke.sh)
+  // passes the build's _ENV through this var so dashboard URL expectations
+  // align with what the .exe actually loads.
+  const override = process.env.RELAYGATE_TEST_ENV;
+  if (override === "dev" || override === "staging" || override === "prod") {
+    return override;
+  }
   try {
     const pkg = JSON.parse(
       fs.readFileSync(path.join(APP_ENTRY, "package.json"), "utf8"),
@@ -68,11 +87,9 @@ async function main(): Promise<void> {
     throw new Error(`Electron binary not found at ${ELECTRON_BIN}; run \`npm install\` first`);
   }
 
-  const electronArgs = [
-    APP_ENTRY,
-    `--remote-debugging-port=${DEBUG_PORT}`,
-    "--no-sandbox",
-  ];
+  const electronArgs = PACKAGED_BIN
+    ? [`--remote-debugging-port=${DEBUG_PORT}`, "--no-sandbox"]
+    : [APP_ENTRY, `--remote-debugging-port=${DEBUG_PORT}`, "--no-sandbox"];
 
   const child: ChildProcess = spawn(ELECTRON_BIN, electronArgs, {
     env: { ...process.env, ELECTRON_ENABLE_LOGGING: "1" },
