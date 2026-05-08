@@ -189,7 +189,7 @@ steps:
         #
         # Cloud Build substitutions (PROJECT_ID, SHORT_SHA, COMMIT_SHA, _ENV)
         # are NOT auto-exported to the bash env; they're only available via
-        # direct $VAR substitution at YAML-parse time. Pass them through as
+        # direct $$VAR substitution at YAML-parse time. Pass them through as
         # explicit exports so the script (which uses `set -u`) sees them.
         export PROJECT_ID="$PROJECT_ID"
         export SHORT_SHA="$SHORT_SHA"
